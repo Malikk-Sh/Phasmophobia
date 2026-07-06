@@ -1,1 +1,35 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#000000">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<title>ФАЗМОФОБИЯ</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <canvas id="game"></canvas>
 
+  <!-- HUD (наполняется из js/ui/hud.js) -->
+  <div id="hud" class="hidden"></div>
+
+  <!-- Оверлеи (наполняются из js/ui/*.js) -->
+  <div id="menu" class="overlay"></div>
+  <div id="briefing" class="overlay hidden"></div>
+  <div id="journal" class="overlay hidden"></div>
+  <div id="van" class="overlay hidden"></div>
+  <div id="results" class="overlay hidden"></div>
+  <div id="death" class="overlay hidden"></div>
+
+  <div id="toast"></div>
+
+  <div id="rotate-hint">
+    <div class="rotate-icon">📱</div>
+    <p>Поверните устройство горизонтально</p>
+  </div>
+
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>
