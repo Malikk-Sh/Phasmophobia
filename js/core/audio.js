@@ -1,10 +1,16 @@
-// Процедурный звук на WebAudio: эмбиент, шаги, приборы, призрак, охота.
-// Ни одного аудиофайла — всё синтезируется.
+// Звук: реалистичные аудио-ассеты через WebAudio + процедурный fallback.
+// Если assets/audio/manifest.json содержит файлы, игра использует их; иначе синтезирует звук на лету.
 
 let ctx = null;
 let master, comp;
 let noiseBuf = null;
 let started = false;
+const SAMPLE_MANIFEST_URL = 'assets/audio/manifest.json';
+const samples = new Map();
+let assetsLoading = false;
+let assetsLoaded = false;
+let assetsAvailable = false;
+let sampleAmbience = null;
 
 // постоянные узлы
 let droneOsc1, droneOsc2, droneGain;
@@ -16,6 +22,71 @@ let rainGain = null;
 const T = { heart: 0, emf: 0, ghostStep: 0, creak: 8, crackle: 0, whis: 20 };
 
 function now() { return ctx.currentTime; }
+
+
+function chooseSample(key) {
+  const list = samples.get(key);
+  if (!list || !list.length) return null;
+  return list[(Math.random() * list.length) | 0];
+}
+
+function sampleGain(base = 1, variance = 0) {
+  return base * (1 + (Math.random() * 2 - 1) * variance);
+}
+
+function playSample(key, { gain = 1, pan = 0, rate = 1, loop = false } = {}) {
+  if (!ctx) return null;
+  const buffer = chooseSample(key);
+  if (!buffer) return null;
+  const src = ctx.createBufferSource();
+  src.buffer = buffer;
+  src.loop = loop;
+  src.playbackRate.value = rate;
+  const g = ctx.createGain();
+  g.gain.value = gain;
+  const p = ctx.createStereoPanner();
+  p.pan.value = pan;
+  src.connect(g).connect(p).connect(master);
+  src.start();
+  return { src, gain: g, pan: p };
+}
+
+function playAny(keys, opts) {
+  for (const key of keys) {
+    const node = playSample(key, opts);
+    if (node) return node;
+  }
+  return null;
+}
+
+async function loadAudioAssets() {
+  if (assetsLoading || assetsLoaded || !ctx) return;
+  assetsLoading = true;
+  try {
+    const res = await fetch(SAMPLE_MANIFEST_URL, { cache: 'no-cache' });
+    if (!res.ok) return;
+    const manifest = await res.json();
+    const entries = Object.entries(manifest.samples || {});
+    await Promise.all(entries.map(async ([key, urls]) => {
+      const decoded = [];
+      await Promise.all((urls || []).map(async (url) => {
+        const audioRes = await fetch(url);
+        if (!audioRes.ok) return;
+        const arrayBuffer = await audioRes.arrayBuffer();
+        decoded.push(await ctx.decodeAudioData(arrayBuffer));
+      }));
+      if (decoded.length) {
+        samples.set(key, decoded);
+        assetsAvailable = true;
+      }
+    }));
+  } catch (err) {
+    console.warn('Audio assets are unavailable; procedural fallback is active.', err);
+  } finally {
+    assetsLoaded = true;
+    assetsLoading = false;
+  }
+}
 
 function makeNoiseBuffer() {
   const len = ctx.sampleRate * 2;
@@ -87,6 +158,7 @@ export const audio = {
     master.gain.value = 0.9;
     master.connect(comp).connect(ctx.destination);
     this.ready = true;
+    loadAudioAssets().then(() => { if (this.ready) this.startSampleAmbience(); });
     this.startAmbient();
   },
 
@@ -130,13 +202,30 @@ export const audio = {
     rainSrc.start();
   },
 
+  startSampleAmbience() {
+    if (!assetsAvailable || sampleAmbience) return;
+    sampleAmbience = {
+      roomtone: playSample('ambience.indoor', { gain: 0, loop: true }),
+      basement: playSample('ambience.basement', { gain: 0, loop: true }),
+      rain: playSample('ambience.rain', { gain: 0, loop: true }),
+      wind: playSample('ambience.wind', { gain: 0, loop: true }),
+    };
+  },
+
   setAmbience(indoors, basement) {
     if (!this.ready) return;
     const t = now();
-    droneGain.gain.linearRampToValueAtTime(indoors ? (basement ? 0.05 : 0.035) : 0.015, t + 1.2);
-    windGain.gain.linearRampToValueAtTime(indoors ? 0.006 : 0.03, t + 1.2);
+    const synthScale = assetsAvailable ? 0.35 : 1;
+    droneGain.gain.linearRampToValueAtTime((indoors ? (basement ? 0.05 : 0.035) : 0.015) * synthScale, t + 1.2);
+    windGain.gain.linearRampToValueAtTime((indoors ? 0.006 : 0.03) * synthScale, t + 1.2);
     // дождь: снаружи в полную силу, в доме — приглушённо по крыше, в подвале — нет
-    rainGain.gain.linearRampToValueAtTime(indoors ? (basement ? 0 : 0.008) : 0.035, t + 1.2);
+    rainGain.gain.linearRampToValueAtTime((indoors ? (basement ? 0 : 0.008) : 0.035) * synthScale, t + 1.2);
+    if (sampleAmbience) {
+      sampleAmbience.roomtone?.gain.gain.linearRampToValueAtTime(indoors && !basement ? 0.22 : 0, t + 1.2);
+      sampleAmbience.basement?.gain.gain.linearRampToValueAtTime(indoors && basement ? 0.28 : 0, t + 1.2);
+      sampleAmbience.rain?.gain.gain.linearRampToValueAtTime(indoors ? (basement ? 0 : 0.08) : 0.32, t + 1.2);
+      sampleAmbience.wind?.gain.gain.linearRampToValueAtTime(indoors ? 0.04 : 0.22, t + 1.2);
+    }
   },
 
   // ---------- Кадровое обновление ----------
@@ -148,8 +237,10 @@ export const audio = {
       if (T.heart <= 0) {
         T.heart = 1.15 - s.heartbeat * 0.65;
         const g = 0.1 + s.heartbeat * 0.2;
-        tone({ type: 'sine', freq: 58, dur: 0.11, gain: g, slide: 40 });
-        setTimeout(() => started && tone({ type: 'sine', freq: 52, dur: 0.1, gain: g * 0.7, slide: 38 }), 160);
+        if (!playSample('player.heartbeat', { gain: g * 1.4, rate: sampleGain(1, 0.03) })) {
+          tone({ type: 'sine', freq: 58, dur: 0.11, gain: g, slide: 40 });
+          setTimeout(() => started && tone({ type: 'sine', freq: 52, dur: 0.1, gain: g * 0.7, slide: 38 }), 160);
+        }
       }
     }
     // писк ЭМП: приборный, мягкий (короткий синус + слабая гармоника)
@@ -168,7 +259,7 @@ export const audio = {
       T.crackle -= dt;
       if (T.crackle <= 0) {
         T.crackle = 0.15 + Math.random() * 0.5;
-        noise({
+        if (!playSample('radio.crackle', { gain: 0.35, rate: sampleGain(1, 0.12) })) noise({
           dur: 0.05 + Math.random() * 0.1, type: 'bandpass',
           freq: 600 + Math.random() * 2600, q: 8, gain: 0.05 + Math.random() * 0.05,
           rate: 1.5 + Math.random(),
@@ -188,8 +279,10 @@ export const audio = {
       T.ghostStep -= dt;
       if (T.ghostStep <= 0) {
         T.ghostStep = 0.55;
-        noise({ dur: 0.16, type: 'lowpass', freq: 130, gain: 0.16 * s.huntNear, rate: 0.5 });
-        tone({ type: 'sine', freq: 40, dur: 0.15, gain: 0.22 * s.huntNear, slide: 28 });
+        if (!playSample('ghost.step', { gain: 0.45 * s.huntNear, rate: sampleGain(1, 0.08) })) {
+          noise({ dur: 0.16, type: 'lowpass', freq: 130, gain: 0.16 * s.huntNear, rate: 0.5 });
+          tone({ type: 'sine', freq: 40, dur: 0.15, gain: 0.22 * s.huntNear, slide: 28 });
+        }
       }
     }
     // случайные скрипы дома
@@ -198,8 +291,10 @@ export const audio = {
       T.creak = 14 + Math.random() * 26;
       if (Math.random() < 0.6) {
         const pan = Math.random() * 1.6 - 0.8;
-        if (Math.random() < 0.5) tone({ type: 'sawtooth', freq: 140 + Math.random() * 120, slide: 90, dur: 0.9, gain: 0.012, pan, vib: 14, vibRate: 3 });
-        else noise({ dur: 0.5, freq: 300, gain: 0.02, pan, type: 'bandpass', q: 3 });
+        if (!playSample('house.creak', { gain: 0.45, pan, rate: sampleGain(1, 0.08) })) {
+          if (Math.random() < 0.5) tone({ type: 'sawtooth', freq: 140 + Math.random() * 120, slide: 90, dur: 0.9, gain: 0.012, pan, vib: 14, vibRate: 3 });
+          else noise({ dur: 0.5, freq: 300, gain: 0.02, pan, type: 'bandpass', q: 3 });
+        }
       }
     }
   },
@@ -208,6 +303,7 @@ export const audio = {
   footstep(outdoors) {
     if (!this.ready) return;
     const v = 0.05 + Math.random() * 0.02;
+    if (playSample(outdoors ? 'player.step.outdoor' : 'player.step.indoor', { gain: 0.35, rate: sampleGain(1, 0.06), pan: Math.random() * 0.2 - 0.1 })) return;
     if (outdoors) noise({ dur: 0.09, type: 'highpass', freq: 500, gain: v * 0.9, rate: 1.6 });
     else {
       noise({ dur: 0.07, type: 'lowpass', freq: 300, gain: v, rate: 0.8 });
@@ -217,6 +313,7 @@ export const audio = {
 
   doorCreak(slam = false) {
     if (!this.ready) return;
+    if (playSample(slam ? 'door.slam' : 'door.creak', { gain: slam ? 0.75 : 0.5, rate: sampleGain(1, 0.05) })) return;
     if (slam) {
       noise({ dur: 0.18, freq: 200, gain: 0.3, type: 'lowpass' });
       tone({ type: 'sine', freq: 70, slide: 40, dur: 0.22, gain: 0.3 });
@@ -226,32 +323,37 @@ export const audio = {
     }
   },
 
-  switchClick() { if (this.ready) noise({ dur: 0.04, type: 'highpass', freq: 1800, gain: 0.12 }); },
-  uiClick() { if (this.ready) tone({ type: 'sine', freq: 660, dur: 0.05, gain: 0.05 }); },
+  switchClick() { if (this.ready && !playSample('switch.click', { gain: 0.45 })) noise({ dur: 0.04, type: 'highpass', freq: 1800, gain: 0.12 }); },
+  uiClick() { if (this.ready && !playSample('ui.click', { gain: 0.35 })) tone({ type: 'sine', freq: 660, dur: 0.05, gain: 0.05 }); },
 
   breakerOff() {
     if (!this.ready) return;
+    if (playSample('breaker.off', { gain: 0.7 })) return;
     tone({ type: 'square', freq: 120, slide: 45, dur: 0.5, gain: 0.15 });
     noise({ dur: 0.4, freq: 150, gain: 0.2, freqEnd: 60 });
   },
   breakerOn() {
     if (!this.ready) return;
+    if (playSample('breaker.on', { gain: 0.65 })) return;
     tone({ type: 'square', freq: 60, slide: 130, dur: 0.3, gain: 0.12 });
     noise({ dur: 0.15, freq: 2000, gain: 0.06, type: 'highpass' });
   },
 
   propWhoosh() {
     if (!this.ready) return;
+    if (playSample('prop.whoosh', { gain: 0.45, rate: sampleGain(1, 0.1) })) return;
     noise({ dur: 0.25, type: 'bandpass', freq: 900, freqEnd: 300, q: 1.5, gain: 0.1 });
   },
   propImpact(hard = true) {
     if (!this.ready) return;
+    if (playSample(hard ? 'prop.impact.hard' : 'prop.impact.soft', { gain: hard ? 0.55 : 0.45, rate: sampleGain(1, 0.12) })) return;
     noise({ dur: 0.12, freq: hard ? 2400 : 500, type: hard ? 'highpass' : 'lowpass', gain: 0.18 });
     tone({ type: 'triangle', freq: hard ? 320 : 120, slide: 60, dur: 0.12, gain: 0.1 });
   },
 
   writing() {
     if (!this.ready) return;
+    if (playSample('ghost.writing', { gain: 0.45, rate: sampleGain(1, 0.05) })) return;
     for (let i = 0; i < 5; i++) {
       setTimeout(() => started && noise({ dur: 0.08, type: 'bandpass', freq: 2600, q: 4, gain: 0.05 }), i * 130);
     }
@@ -259,6 +361,7 @@ export const audio = {
 
   whisper() {
     if (!this.ready) return;
+    if (playSample('ghost.whisper', { gain: 0.45, pan: Math.random() * 1.4 - 0.7, rate: sampleGain(1, 0.05) })) return;
     // дыхание-шёпот: медленные выдохи с формантой, гуляющей как речь
     const pan = Math.random() * 1.4 - 0.7;
     for (let i = 0; i < 3; i++) {
@@ -279,6 +382,7 @@ export const audio = {
 
   spiritResponse() {
     if (!this.ready) return;
+    if (playSample('ghost.spiritResponse', { gain: 0.55, rate: sampleGain(1, 0.04) })) return;
     // «голос» из эфира: шёпот в двух формантных полосах + низкий гул под ним
     const syll = 2 + (Math.random() * 2 | 0);
     for (let i = 0; i < syll; i++) {
@@ -296,6 +400,7 @@ export const audio = {
 
   ghostEvent(form) {
     if (!this.ready) return;
+    if (playAny([`ghost.event.${form}`, 'ghost.event'], { gain: 0.65, rate: sampleGain(1, 0.04) })) return;
     if (form === 'lady') {
       // далёкий женский напев с дыханием
       const seq = [262, 247, 220, 196, 220];
@@ -324,27 +429,31 @@ export const audio = {
 
   bansheeWail() {
     if (!this.ready) return;
+    if (playSample('ghost.bansheeWail', { gain: 0.65 })) return;
     tone({ type: 'sine', freq: 880, slide: 420, dur: 2.6, gain: 0.045, vib: 30, vibRate: 5 });
     tone({ type: 'sine', freq: 1320, slide: 660, dur: 2.2, gain: 0.02, vib: 40, vibRate: 6 });
   },
 
   crucifixBurn() {
     if (!this.ready) return;
+    if (playSample('item.crucifixBurn', { gain: 0.65 })) return;
     noise({ dur: 0.8, type: 'highpass', freq: 2200, gain: 0.12 });
     tone({ type: 'sine', freq: 660, slide: 1200, dur: 0.5, gain: 0.06 });
   },
 
   smudgeUse() {
     if (!this.ready) return;
+    if (playSample('item.smudge', { gain: 0.5 })) return;
     noise({ dur: 1.4, type: 'highpass', freq: 3400, gain: 0.05 });
     noise({ dur: 1.2, type: 'bandpass', freq: 500, q: 1, gain: 0.04 });
   },
-  saltPour() { if (this.ready) noise({ dur: 0.4, type: 'highpass', freq: 4200, gain: 0.07 }); },
-  pills() { if (this.ready) { noise({ dur: 0.1, type: 'highpass', freq: 2500, gain: 0.06 }); setTimeout(() => started && noise({ dur: 0.08, type: 'highpass', freq: 2000, gain: 0.05 }), 150); } },
-  cameraPlace() { if (this.ready) { tone({ type: 'square', freq: 900, dur: 0.05, gain: 0.05 }); setTimeout(() => started && tone({ type: 'square', freq: 1200, dur: 0.05, gain: 0.045 }), 90); } },
+  saltPour() { if (this.ready && !playSample('item.saltPour', { gain: 0.45 })) noise({ dur: 0.4, type: 'highpass', freq: 4200, gain: 0.07 }); },
+  pills() { if (this.ready) { if (playSample('item.pills', { gain: 0.45 })) return; noise({ dur: 0.1, type: 'highpass', freq: 2500, gain: 0.06 }); setTimeout(() => started && noise({ dur: 0.08, type: 'highpass', freq: 2000, gain: 0.05 }), 150); } },
+  cameraPlace() { if (this.ready) { if (playSample('item.cameraPlace', { gain: 0.5 })) return; tone({ type: 'square', freq: 900, dur: 0.05, gain: 0.05 }); setTimeout(() => started && tone({ type: 'square', freq: 1200, dur: 0.05, gain: 0.045 }), 90); } },
 
   huntStart() {
     if (!this.ready) return;
+    if (playSample('hunt.start', { gain: 0.8 })) return;
     // обрыв света: глубокий саб-провал + нарастающий шумовой райзер
     tone({ type: 'sine', freq: 82, slide: 26, dur: 2.2, gain: 0.22 });
     noise({ dur: 2.0, freq: 90, type: 'lowpass', gain: 0.16, freqEnd: 320, attack: 0.5 });
@@ -359,11 +468,13 @@ export const audio = {
 
   huntEnd() {
     if (!this.ready) return;
+    if (playSample('hunt.end', { gain: 0.55 })) return;
     tone({ type: 'sine', freq: 90, slide: 30, dur: 2.2, gain: 0.1 });
   },
 
   jumpscare() {
     if (!this.ready) return;
+    if (playSample('player.jumpscare', { gain: 0.9 })) return;
     // мгновенный удар + рваный крик из формант (менее «пищит», более глотка)
     noise({ dur: 0.14, type: 'lowpass', freq: 500, gain: 0.4, attack: 0.001 });
     tone({ type: 'sine', freq: 60, slide: 28, dur: 1.3, gain: 0.32, attack: 0.001 });
@@ -375,6 +486,7 @@ export const audio = {
 
   thunder(closeness = 0.5) {
     if (!this.ready) return;
+    if (playSample('weather.thunder', { gain: 0.35 + closeness * 0.45, rate: sampleGain(1, 0.08) })) return;
     // раскат: длинный низкий рокот, при близком ударе — треск в начале
     if (closeness > 0.7) {
       noise({ dur: 0.4, type: 'highpass', freq: 900, gain: 0.14, attack: 0.005 });
@@ -389,6 +501,7 @@ export const audio = {
 
   death() {
     if (!this.ready) return;
+    if (playSample('player.death', { gain: 0.7 })) return;
     tone({ type: 'sine', freq: 220, slide: 40, dur: 3.2, gain: 0.12 });
     noise({ dur: 3, freq: 100, type: 'lowpass', gain: 0.1, freqEnd: 40 });
   },
