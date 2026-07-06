@@ -9,7 +9,8 @@ export class FX {
     this.grainTiles = [];
     this.particles = [];
     this.makeGrain();
-    this.flash = 0; // белая вспышка (скример)
+    this.flash = 0;     // белая вспышка (скример)
+    this.lightning = 0; // вспышка молнии 0..1
   }
 
   resize(w, h) {
@@ -91,6 +92,11 @@ export class FX {
       });
     }
     if (this.flash > 0) this.flash = Math.max(0, this.flash - dt * 2.2);
+    if (this.lightning > 0) {
+      // молния гаснет рвано, с повторным подмигиванием
+      this.lightning -= dt * (Math.random() < 0.2 ? 6 : 2.2);
+      if (this.lightning < 0) this.lightning = 0;
+    }
   }
 
   // мировые частицы (вызывается в трансформации камеры)
@@ -108,6 +114,29 @@ export class FX {
   // экранные эффекты (после света)
   drawScreen(ctx, w, h, game) {
     const pl = game.player;
+    const outdoors = !game.world.isIndoors(pl.floor, pl.x, pl.y);
+
+    // дождь (только под открытым небом)
+    if (outdoors) {
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.strokeStyle = 'rgba(170,195,220,0.13)';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      for (let i = 0; i < 64; i++) {
+        const x = Math.random() * w, y = Math.random() * h;
+        const len = 9 + Math.random() * 13;
+        ctx.moveTo(x, y);
+        ctx.lineTo(x - len * 0.25, y + len);
+      }
+      ctx.stroke();
+      // редкие «отскоки» капель
+      ctx.fillStyle = 'rgba(170,195,220,0.10)';
+      for (let i = 0; i < 10; i++) {
+        ctx.beginPath();
+        ctx.ellipse(Math.random() * w, Math.random() * h, 2.5, 1, 0, 0, 7);
+        ctx.fill();
+      }
+    }
     // виньетка: сильнее при низком рассудке и охоте
     let vig = 0.55 + (1 - pl.sanity / 100) * 0.4;
     if (game.ghost && game.ghost.state === 'hunt') {
@@ -138,6 +167,13 @@ export class FX {
     ctx.fillRect(0, 0, w, h);
     ctx.globalCompositeOperation = 'source-over';
 
+    // молния: холодная заливка экрана (в доме — слабее, сквозь окна)
+    if (this.lightning > 0.02) {
+      const k = outdoors ? 0.3 : 0.08;
+      ctx.fillStyle = `rgba(190,205,235,${this.lightning * k})`;
+      ctx.fillRect(0, 0, w, h);
+    }
+
     // вспышка скримера
     if (this.flash > 0) {
       ctx.fillStyle = `rgba(200,210,220,${this.flash})`;
@@ -145,5 +181,5 @@ export class FX {
     }
   }
 
-  clear() { this.particles.length = 0; this.flash = 0; }
+  clear() { this.particles.length = 0; this.flash = 0; this.lightning = 0; }
 }

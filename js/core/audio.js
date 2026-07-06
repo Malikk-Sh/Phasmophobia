@@ -10,10 +10,10 @@ let started = false;
 let droneOsc1, droneOsc2, droneGain;
 let windSrc, windGain, windFilter;
 let spiritSrc, spiritGain;
-let huntGainNode = null;
+let rainGain = null;
 
 // таймеры
-const T = { heart: 0, emf: 0, ghostStep: 0, creak: 8 };
+const T = { heart: 0, emf: 0, ghostStep: 0, creak: 8, crackle: 0, whis: 20 };
 
 function now() { return ctx.currentTime; }
 
@@ -120,13 +120,23 @@ export const audio = {
     spiritGain = ctx.createGain(); spiritGain.gain.value = 0;
     spiritSrc.connect(sf).connect(spiritGain).connect(master);
     spiritSrc.start();
+    // дождь: мягкий широкополосный шум
+    const rainSrc = ctx.createBufferSource(); rainSrc.buffer = noiseBuf; rainSrc.loop = true;
+    rainSrc.playbackRate.value = 1.35;
+    const rf = ctx.createBiquadFilter(); rf.type = 'highpass'; rf.frequency.value = 1500;
+    const rf2 = ctx.createBiquadFilter(); rf2.type = 'lowpass'; rf2.frequency.value = 6500;
+    rainGain = ctx.createGain(); rainGain.gain.value = 0;
+    rainSrc.connect(rf).connect(rf2).connect(rainGain).connect(master);
+    rainSrc.start();
   },
 
   setAmbience(indoors, basement) {
     if (!this.ready) return;
     const t = now();
     droneGain.gain.linearRampToValueAtTime(indoors ? (basement ? 0.05 : 0.035) : 0.015, t + 1.2);
-    windGain.gain.linearRampToValueAtTime(indoors ? 0.006 : 0.035, t + 1.2);
+    windGain.gain.linearRampToValueAtTime(indoors ? 0.006 : 0.03, t + 1.2);
+    // дождь: снаружи в полную силу, в доме — приглушённо по крыше, в подвале — нет
+    rainGain.gain.linearRampToValueAtTime(indoors ? (basement ? 0 : 0.008) : 0.035, t + 1.2);
   },
 
   // ---------- Кадровое обновление ----------
@@ -142,16 +152,37 @@ export const audio = {
         setTimeout(() => started && tone({ type: 'sine', freq: 52, dur: 0.1, gain: g * 0.7, slide: 38 }), 160);
       }
     }
-    // писк ЭМП
+    // писк ЭМП: приборный, мягкий (короткий синус + слабая гармоника)
     if (s.emfLevel > 0) {
       T.emf -= dt;
       if (T.emf <= 0) {
-        T.emf = s.emfLevel >= 5 ? 0.09 : 0.65 / s.emfLevel;
-        tone({ type: 'square', freq: 520 + s.emfLevel * 130, dur: 0.05, gain: 0.05 + s.emfLevel * 0.012 });
+        T.emf = s.emfLevel >= 5 ? 0.11 : 0.7 / s.emfLevel;
+        const f = 780 + s.emfLevel * 70;
+        tone({ type: 'sine', freq: f, dur: 0.05, gain: 0.045 + s.emfLevel * 0.008, attack: 0.002 });
+        tone({ type: 'sine', freq: f * 2, dur: 0.04, gain: 0.012, attack: 0.002 });
       }
     }
-    // спиритбокс: шум эфира
-    spiritGain.gain.setTargetAtTime(s.spiritOn ? 0.05 : 0, now(), 0.1);
+    // спиритбокс: эфир + случайные трески перестройки частоты
+    spiritGain.gain.setTargetAtTime(s.spiritOn ? 0.04 : 0, now(), 0.1);
+    if (s.spiritOn) {
+      T.crackle -= dt;
+      if (T.crackle <= 0) {
+        T.crackle = 0.15 + Math.random() * 0.5;
+        noise({
+          dur: 0.05 + Math.random() * 0.1, type: 'bandpass',
+          freq: 600 + Math.random() * 2600, q: 8, gain: 0.05 + Math.random() * 0.05,
+          rate: 1.5 + Math.random(),
+        });
+      }
+    }
+    // шёпот на грани безумия
+    if (s.lowSanity) {
+      T.whis -= dt;
+      if (T.whis <= 0) {
+        T.whis = 12 + Math.random() * 22;
+        this.whisper();
+      }
+    }
     // шаги призрака при охоте
     if (s.huntNear > 0.02) {
       T.ghostStep -= dt;
@@ -228,40 +259,66 @@ export const audio = {
 
   whisper() {
     if (!this.ready) return;
-    for (let i = 0; i < 4; i++) {
-      setTimeout(() => started && noise({
-        dur: 0.22, type: 'bandpass', freq: 1300 + Math.random() * 1400, q: 6,
-        gain: 0.05, pan: Math.random() * 1.4 - 0.7,
-      }), i * 180 + Math.random() * 80);
+    // дыхание-шёпот: медленные выдохи с формантой, гуляющей как речь
+    const pan = Math.random() * 1.4 - 0.7;
+    for (let i = 0; i < 3; i++) {
+      setTimeout(() => {
+        if (!started) return;
+        noise({
+          dur: 0.5 + Math.random() * 0.3, type: 'bandpass',
+          freq: 900 + Math.random() * 900, q: 3.5,
+          gain: 0.028, pan, attack: 0.12, rate: 0.8,
+        });
+        noise({
+          dur: 0.4, type: 'bandpass', freq: 2400 + Math.random() * 1200, q: 7,
+          gain: 0.012, pan, attack: 0.1,
+        });
+      }, i * 420 + Math.random() * 150);
     }
   },
 
   spiritResponse() {
     if (!this.ready) return;
-    // «голос» сквозь помехи
-    const base = 110 + Math.random() * 60;
-    for (let i = 0; i < 3; i++) {
+    // «голос» из эфира: шёпот в двух формантных полосах + низкий гул под ним
+    const syll = 2 + (Math.random() * 2 | 0);
+    for (let i = 0; i < syll; i++) {
       setTimeout(() => {
         if (!started) return;
-        tone({ type: 'sawtooth', freq: base * (1 + i * 0.12), slide: base * 0.7, dur: 0.3, gain: 0.06, vib: 25, vibRate: 9 });
-        noise({ dur: 0.28, type: 'bandpass', freq: 1600, q: 5, gain: 0.08 });
-      }, i * 260);
+        const f1 = 380 + Math.random() * 320;
+        noise({ dur: 0.26, type: 'bandpass', freq: f1, q: 6, gain: 0.11, attack: 0.03, rate: 0.7 });
+        noise({ dur: 0.24, type: 'bandpass', freq: f1 * 3.4, q: 8, gain: 0.05, attack: 0.03 });
+        tone({ type: 'sine', freq: 95 + Math.random() * 40, dur: 0.28, gain: 0.035, vib: 12, vibRate: 7 });
+      }, i * 300 + Math.random() * 90);
     }
+    // всплеск помех после «слов»
+    setTimeout(() => started && noise({ dur: 0.35, type: 'bandpass', freq: 1800, q: 2, gain: 0.05 }), syll * 300 + 150);
   },
 
   ghostEvent(form) {
     if (!this.ready) return;
     if (form === 'lady') {
-      // женский напев
-      const seq = [523, 494, 440, 392];
-      seq.forEach((f, i) => setTimeout(() => started &&
-        tone({ type: 'sine', freq: f * 0.5, dur: 0.8, gain: 0.045, vib: 6, vibRate: 5.5 }), i * 620));
+      // далёкий женский напев с дыханием
+      const seq = [262, 247, 220, 196, 220];
+      seq.forEach((f, i) => setTimeout(() => {
+        if (!started) return;
+        tone({ type: 'sine', freq: f, dur: 1.0, gain: 0.035, vib: 4, vibRate: 5, attack: 0.25 });
+        tone({ type: 'sine', freq: f * 2.01, dur: 0.9, gain: 0.008, attack: 0.25 });
+        noise({ dur: 0.9, type: 'bandpass', freq: f * 4, q: 4, gain: 0.006, attack: 0.3 });
+      }, i * 640));
     } else if (form === 'hangman') {
-      tone({ type: 'sawtooth', freq: 60, slide: 35, dur: 2.4, gain: 0.06, vib: 8, vibRate: 2 });
-      noise({ dur: 2, freq: 240, type: 'bandpass', q: 3, gain: 0.03 });
+      // скрип верёвки + тяжёлый стон
+      for (let i = 0; i < 3; i++) {
+        setTimeout(() => started && tone({
+          type: 'sawtooth', freq: 130 + Math.random() * 50, slide: 80,
+          dur: 0.7, gain: 0.02, vib: 20, vibRate: 3,
+        }), i * 800);
+      }
+      tone({ type: 'sine', freq: 68, slide: 46, dur: 2.8, gain: 0.06, vib: 5, vibRate: 1.6, attack: 0.4 });
     } else {
-      noise({ dur: 2.4, freq: 90, type: 'lowpass', gain: 0.1, freqEnd: 45 });
-      tone({ type: 'triangle', freq: 38, dur: 2.4, gain: 0.08, vib: 5, vibRate: 1.5 });
+      // тень: втягивающий воздух гул + шелест
+      noise({ dur: 2.6, freq: 120, type: 'lowpass', gain: 0.09, freqEnd: 40, attack: 0.5 });
+      tone({ type: 'sine', freq: 44, dur: 2.6, gain: 0.07, vib: 4, vibRate: 1.2, attack: 0.4 });
+      noise({ dur: 1.8, type: 'bandpass', freq: 3200, q: 2, gain: 0.012, attack: 0.6 });
     }
   },
 
@@ -288,12 +345,16 @@ export const audio = {
 
   huntStart() {
     if (!this.ready) return;
-    // нарастающий гул + удар
-    tone({ type: 'sawtooth', freq: 30, slide: 55, dur: 1.6, gain: 0.16 });
-    noise({ dur: 1.8, freq: 60, type: 'lowpass', gain: 0.22, freqEnd: 200 });
-    setTimeout(() => started && tone({ type: 'sine', freq: 200, slide: 40, dur: 0.9, gain: 0.22 }), 300);
-    // вой
-    setTimeout(() => started && tone({ type: 'sawtooth', freq: 320, slide: 110, dur: 1.8, gain: 0.05, vib: 45, vibRate: 7 }), 500);
+    // обрыв света: глубокий саб-провал + нарастающий шумовой райзер
+    tone({ type: 'sine', freq: 82, slide: 26, dur: 2.2, gain: 0.22 });
+    noise({ dur: 2.0, freq: 90, type: 'lowpass', gain: 0.16, freqEnd: 320, attack: 0.5 });
+    setTimeout(() => started && tone({ type: 'sine', freq: 180, slide: 34, dur: 1.1, gain: 0.18 }), 350);
+    // далёкий нечеловеческий вой
+    setTimeout(() => {
+      if (!started) return;
+      tone({ type: 'sawtooth', freq: 240, slide: 90, dur: 2.2, gain: 0.03, vib: 30, vibRate: 5.5, attack: 0.3 });
+      noise({ dur: 2.0, type: 'bandpass', freq: 700, q: 3, gain: 0.04, freqEnd: 250, attack: 0.3 });
+    }, 550);
   },
 
   huntEnd() {
@@ -303,12 +364,27 @@ export const audio = {
 
   jumpscare() {
     if (!this.ready) return;
-    // крик — резкий, но с ограниченной громкостью
-    for (const f of [720, 940, 1180]) {
-      tone({ type: 'sawtooth', freq: f, slide: f * 0.45, dur: 1.1, gain: 0.11, vib: 60, vibRate: 11 });
+    // мгновенный удар + рваный крик из формант (менее «пищит», более глотка)
+    noise({ dur: 0.14, type: 'lowpass', freq: 500, gain: 0.4, attack: 0.001 });
+    tone({ type: 'sine', freq: 60, slide: 28, dur: 1.3, gain: 0.32, attack: 0.001 });
+    for (const [f, g] of [[520, 0.12], [830, 0.09], [1350, 0.05]]) {
+      tone({ type: 'sawtooth', freq: f * 1.15, slide: f * 0.55, dur: 0.9, gain: g, vib: 90, vibRate: 16, attack: 0.005 });
     }
-    noise({ dur: 1.2, type: 'bandpass', freq: 1500, q: 0.7, gain: 0.28, freqEnd: 500 });
-    tone({ type: 'sine', freq: 55, slide: 30, dur: 1.4, gain: 0.3 });
+    noise({ dur: 1.0, type: 'bandpass', freq: 1100, q: 1.2, gain: 0.22, freqEnd: 350, attack: 0.004 });
+  },
+
+  thunder(closeness = 0.5) {
+    if (!this.ready) return;
+    // раскат: длинный низкий рокот, при близком ударе — треск в начале
+    if (closeness > 0.7) {
+      noise({ dur: 0.4, type: 'highpass', freq: 900, gain: 0.14, attack: 0.005 });
+    }
+    noise({
+      dur: 3.5 + Math.random() * 2, type: 'lowpass',
+      freq: 160 + closeness * 120, freqEnd: 45,
+      gain: 0.1 + closeness * 0.14, attack: 0.15, rate: 0.5,
+    });
+    tone({ type: 'sine', freq: 55, slide: 30, dur: 3.2, gain: 0.06 + closeness * 0.08, attack: 0.1 });
   },
 
   death() {

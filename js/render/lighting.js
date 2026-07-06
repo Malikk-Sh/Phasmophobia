@@ -90,11 +90,12 @@ export class Lighting {
 
     const fl = this.flicker;
     const outdoors = !world.isIndoors(player.floor, player.x, player.y);
+    const bolt = game.fx.lightning || 0;
 
     // фоновая видимость внутри полигона
     if (outdoors) {
-      // лунный свет на улице
-      c.fillStyle = 'rgba(0,0,0,0.42)';
+      // лунный свет + вспышки молний
+      c.fillStyle = `rgba(0,0,0,${Math.min(0.92, 0.42 + bolt * 0.5)})`;
       c.fillRect(cam.x - 2000, cam.y - 2000, 4000, 4000);
     } else {
       c.fillStyle = 'rgba(0,0,0,0.09)';
@@ -119,10 +120,11 @@ export class Lighting {
       for (const l of room.lamps) this.punch(l.x, l.y, TILE * 5.6, 0.93 * fl);
     }
 
-    // лунный свет из окон (первый этаж)
+    // лунный свет из окон (первый этаж); при молнии окна вспыхивают
     if (player.floor === 0) {
       for (const w of world.windows) {
-        this.punch((w.tx + 0.5) * TILE, (w.ty + 0.5) * TILE, TILE * 1.9, 0.16);
+        this.punch((w.tx + 0.5) * TILE, (w.ty + 0.5) * TILE,
+          TILE * (1.9 + bolt * 1.6), 0.16 + bolt * 0.55);
       }
       // свет крыльца
       this.punch(9.2 * TILE, 14.4 * TILE, TILE * 2.6, (0.45 + Math.sin(game.time * 13) * 0.06) * fl);

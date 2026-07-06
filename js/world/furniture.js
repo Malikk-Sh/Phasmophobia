@@ -47,8 +47,8 @@ export function furnish(world) {
     });
   }
 
-  // ===== Гараж =====
-  place('car', 0, 12.2, 8.0, 2.6, 4.4);
+  // ===== Гараж ===== (двери: гараж→коридор в тайле x14 — держим проём свободным)
+  place('car', 0, 11.4, 8.0, 2.5, 3.6);
   place('workbench', 0, 16.4, 6.15, 2.4, 0.85);
   place('shelfTall', 0, 11.15, 10.2, 0.75, 2.4, { tall: true });
   place('locker', 0, 18.05, 8.3, 0.9, 1.7, { tall: true, hide: true, name: 'Шкафчик' });
@@ -59,7 +59,7 @@ export function furnish(world) {
   // ===== Прачечная =====
   place('washer', 0, 20.15, 6.1, 1.0, 1.05);
   place('dryer', 0, 20.15, 7.3, 1.0, 1.05);
-  place('waterheater', 0, 20.15, 11.4, 1.0, 1.3, { tall: true });
+  place('waterheater', 0, 20.1, 11.3, 0.95, 1.3, { tall: true });
   place('basket', 0, 21.6, 8.6, 0.8, 0.8, { solid: false });
   prop('bottle', 0, 20.4, 8.9);
 
@@ -97,17 +97,17 @@ export function furnish(world) {
   prop('book', 0, 24.5, 14.4);
 
   // ===== Спальня =====
-  place('rugRect', 0, 12.0, 19.2, 4.2, 3.4, { solid: false });
-  place('bedDouble', 0, 12.6, 18.2, 2.3, 3.1);
-  place('nightstand', 0, 11.5, 18.25, 0.8, 0.8);
-  place('nightstand', 0, 15.1, 18.25, 0.8, 0.8);
+  place('rugRect', 0, 11.6, 19.2, 4.2, 3.4, { solid: false });
+  place('bedDouble', 0, 11.9, 18.2, 2.0, 3.0); // дверь спальни в x14..15 — не заставлять!
+  place('nightstand', 0, 11.15, 18.25, 0.7, 0.7);
+  place('nightstand', 0, 11.15, 21.5, 0.7, 0.7);
   place('wardrobe', 0, 17.0, 19.6, 0.92, 2.3, { tall: true, hide: true, name: 'Гардероб' });
   place('dresser', 0, 11.15, 22.9, 1.9, 0.85);
   prop('book', 0, 15.6, 21.6);
 
   // ===== Ванная =====
   place('tub', 0, 19.15, 21.5, 2.7, 1.35);
-  place('toilet', 0, 19.2, 18.3, 0.85, 1.15);
+  place('toilet', 0, 19.15, 18.3, 0.8, 1.15);
   place('sinkCab', 0, 21.4, 18.2, 1.4, 0.8);
   prop('bottle', 0, 21.9, 19.5);
 
@@ -116,12 +116,12 @@ export function furnish(world) {
   place('sofa', 0, 26.1, 21.9, 3.3, 1.15);
   place('armchair', 0, 24.35, 19.9, 1.2, 1.3);
   place('coffeeTable', 0, 27.0, 20.3, 1.9, 1.05);
-  place('tvstand', 0, 26.8, 18.15, 2.7, 0.72);
+  place('tvstand', 0, 24.35, 18.12, 2.5, 0.72); // арка гостиной x27..30 — свободна
   place('bookshelf', 0, 33.05, 19.2, 0.9, 2.5, { tall: true });
   place('plant', 0, 24.35, 18.3, 0.85, 0.85);
   prop('book', 0, 27.8, 20.7);
   prop('cup', 0, 28.6, 20.55);
-  prop('bottle', 0, 27.4, 18.4);
+  prop('bottle', 0, 25.1, 18.4);
 
   // ===== Детская =====
   place('rugRound', 0, 36.0, 19.8, 2.9, 2.6, { solid: false });
@@ -138,7 +138,7 @@ export function furnish(world) {
   place('crate', -1, 3.2, 7.2, 1.25, 1.25);
   place('crate', -1, 4.7, 7.5, 1.0, 1.0);
   place('barrel', -1, 13.6, 3.3, 0.95, 0.95);
-  place('shelfTall', -1, 14.1, 4.6, 0.82, 2.6, { tall: true });
+  place('shelfTall', -1, 14.1, 6.5, 0.82, 2.4, { tall: true }); // дверь в котельную (15,5) свободна
   prop('can', -1, 8.2, 6.6);
   prop('bottle', -1, 11.5, 7.7);
 
@@ -146,7 +146,7 @@ export function furnish(world) {
   place('workbench', -1, 3.15, 10.1, 3.0, 0.9);
   place('shelfTall', -1, 9.0, 10.1, 2.5, 0.8, { tall: true });
   place('crate', -1, 12.1, 12.6, 1.25, 1.25);
-  place('locker', -1, 14.1, 12.4, 0.9, 1.7, { tall: true, hide: true, name: 'Шкафчик' });
+  place('locker', -1, 14.05, 10.15, 0.9, 1.7, { tall: true, hide: true, name: 'Шкафчик' }); // дверь (15,12) свободна
   prop('tool', -1, 7.2, 13.1);
   prop('bottle', -1, 5.1, 12.2);
 

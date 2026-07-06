@@ -52,6 +52,7 @@ const game = {
   currentInteraction: null,
   aggression: 0,
   deathT: 0,
+  lightningT: 12,
   stats: { crucifixSaves: 0, smudgeSaves: 0 },
   progress: loadProgress(),
 
@@ -264,6 +265,14 @@ const game = {
         d.open = !d.open;
         d.targetSwing = d.open ? 1 : 0;
         audio.doorCreak(false);
+        // закрываем дверь, стоя в проёме — мягко выйти из него
+        if (!d.open) {
+          const cx = (d.tx + 0.5) * TILE, cy = (d.ty + 0.5) * TILE;
+          if (Math.abs(pl.x - cx) < TILE * 0.65 && Math.abs(pl.y - cy) < TILE * 0.65) {
+            if (d.orient === 'h') pl.y = pl.y < cy ? d.ty * TILE - 10 : (d.ty + 1) * TILE + 10;
+            else pl.x = pl.x < cx ? d.tx * TILE - 10 : (d.tx + 1) * TILE + 10;
+          }
+        }
         break;
       }
       case 'switch': {
@@ -321,6 +330,12 @@ const game = {
     if (this.state === 'dead') return;
 
     const pl = this.player;
+
+    // страховка: входная дверь заперта только во время охоты
+    if (this.ghost && this.ghost.state !== 'hunt') {
+      const fd = this.world.doors.find(d => d.id === this.world.frontDoorId);
+      if (fd && fd.locked) fd.locked = false;
+    }
 
     // подготовительная фаза
     if (this.setupPhase) {
@@ -390,6 +405,15 @@ const game = {
         this.world.roomAt(p.floor, p.x, p.y) === this.ghost.roomId) this.checkObjective('camera');
     }
 
+    // гроза: случайные молнии с громом
+    this.lightningT -= dt;
+    if (this.lightningT <= 0) {
+      this.lightningT = 18 + Math.random() * 34;
+      this.fx.lightning = 0.7 + Math.random() * 0.3;
+      const closeness = Math.random();
+      setTimeout(() => audio.thunder(closeness), 600 + (1 - closeness) * 2600);
+    }
+
     // аудио-состояние
     const gh = this.ghost;
     let heartbeat = 0, huntNear = 0;
@@ -403,6 +427,7 @@ const game = {
       huntNear,
       emfLevel: pl.currentItem() === 'emf' ? equipment.emfLevel : 0,
       spiritOn: pl.currentItem() === 'spirit' && !pl.hidden,
+      lowSanity: pl.sanity < 40 && this.world.isIndoors(pl.floor, pl.x, pl.y),
     });
 
     // камера
@@ -423,8 +448,8 @@ const game = {
 
     this.renderer.drawScene(ctx, this, cam, this.time);
 
-    // видимость + свет
-    const occl = this.world.getOccluders(pl.floor);
+    // видимость + свет (без мебели — шкафы не должны глотать свет)
+    const occl = this.world.getOccluders(pl.floor, false);
     const maxR = pl.hidden ? TILE * 2.4 : Math.hypot(cam.viewW, cam.viewH) / 2 / cam.scale + TILE;
     const visPoly = computeVisibility(pl.x, pl.y, occl, maxR);
     this.lighting.render(this, cam, visPoly);

@@ -12,8 +12,8 @@ export class Camera {
 
   resize(w, h) {
     this.viewW = w; this.viewH = h;
-    // видим ~340 world px по вертикали (≈10.5 тайлов)
-    this.scale = h / 340;
+    // видим ~245 world px по вертикали (≈7.6 тайла) — ближе к игроку
+    this.scale = h / 245;
   }
 
   snapTo(x, y) { this.x = x; this.y = y; }

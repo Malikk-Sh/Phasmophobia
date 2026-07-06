@@ -286,6 +286,12 @@ html, body {
 .gear-item .gi { font-size: 20px; display: block; }
 .gear-item.inslot { border-color: #c8d8a0; color: #e4eecb; background: rgba(50, 60, 40, .5); }
 #van-monitor { width: 100%; border-radius: 6px; border: 1px solid #23343e; background: #020604; display: block; }
+#gear-desc {
+  margin-top: 8px; padding: 8px 10px; min-height: 52px;
+  font-size: 12px; line-height: 1.5; color: #8fa4b0;
+  background: rgba(10, 16, 20, .6); border: 1px solid rgba(120, 150, 170, .15); border-radius: 8px;
+}
+#gear-desc b { color: #cfdde5; }
 .van-meters { font-family: 'Courier New', monospace; font-size: 14px; color: #9fd8a0; line-height: 1.9; }
 .van-meters b { color: #d8e8b0; }
 
