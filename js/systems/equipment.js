@@ -118,11 +118,12 @@ export const equipment = {
     const meta = ITEMS[item];
 
     if (meta.place) {
-      // размещение перед собой
-      const px = pl.x + Math.cos(pl.angle) * TILE * 0.8;
-      const py = pl.y + Math.sin(pl.angle) * TILE * 0.8;
-      const tx = Math.floor(px / TILE), ty = Math.floor(py / TILE);
-      if (world.isBlocked(pl.floor, tx, ty)) { game.log('Здесь не поставить'); return; }
+      // размещение перед собой (если там стена — под собой)
+      let px = pl.x + Math.cos(pl.angle) * TILE * 0.8;
+      let py = pl.y + Math.sin(pl.angle) * TILE * 0.8;
+      if (world.isBlocked(pl.floor, Math.floor(px / TILE), Math.floor(py / TILE))) {
+        px = pl.x; py = pl.y;
+      }
       world.placed.push({
         type: item, x: px, y: py, floor: pl.floor,
         angle: pl.angle, written: false, seen: false,
