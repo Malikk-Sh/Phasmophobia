@@ -526,6 +526,18 @@ export class Renderer {
 
     // призрак под игроком по y? просто: призрак, затем игрок
     if (game.ghost && game.ghost.floor === floor) game.ghost.draw(ctx, t, game);
+
+    // галлюцинация: тень на краю зрения, тает за долю секунды
+    const hal = game.hallucination;
+    if (hal && hal.floor === floor) {
+      const a = Math.max(0, hal.t / hal.max) * 0.38;
+      const g = ctx.createRadialGradient(hal.x, hal.y - 6, 2, hal.x, hal.y - 4, 20);
+      g.addColorStop(0, `rgba(4,4,9,${a})`);
+      g.addColorStop(1, 'rgba(4,4,9,0)');
+      ctx.fillStyle = g;
+      ctx.beginPath(); ctx.ellipse(hal.x, hal.y - 4, 11, 19, 0, 0, 7); ctx.fill();
+    }
+
     player.draw(ctx, t, game);
 
     // частицы мира

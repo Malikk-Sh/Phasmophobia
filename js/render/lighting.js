@@ -22,22 +22,27 @@ export class Lighting {
   }
 
   update(dt, game) {
-    // мерцание: во время охоты или рядом с призраком при событии
+    // мерцание электрики: сила зависит от близости призрака —
+    // охоту игрок распознаёт по «волне» помех, а не по надписи
     this.flickerT -= dt;
-    let target = 1;
+    let level = 0;
     const gh = game.ghost;
     if (gh) {
-      const near = gh.floor === game.player.floor &&
-        Math.hypot(gh.x - game.player.x, gh.y - game.player.y) < TILE * 10;
-      if ((gh.state === 'hunt' || gh.state === 'event') && near) {
-        if (this.flickerT <= 0) {
-          this.flicker = Math.random() < 0.4 ? 0.15 + Math.random() * 0.4 : 1;
-          this.flickerT = 0.04 + Math.random() * 0.12;
-        }
-        return;
-      }
+      const d = gh.floor === game.player.floor
+        ? Math.hypot(gh.x - game.player.x, gh.y - game.player.y)
+        : Infinity;
+      if (gh.state === 'hunt') level = Math.max(0.25, 1.15 - d / (TILE * 14));
+      else if (gh.fakeHuntT > 0 && d < TILE * 13) level = 0.85;
+      else if (gh.state === 'event' && d < TILE * 10) level = 0.7;
     }
-    this.flicker = target;
+    if (level > 0) {
+      if (this.flickerT <= 0) {
+        this.flicker = Math.random() < 0.4 * level ? 0.12 + Math.random() * 0.4 : 1;
+        this.flickerT = 0.04 + Math.random() * (0.2 - level * 0.1);
+      }
+      return;
+    }
+    this.flicker = 1;
   }
 
   // punch: радиальный градиент destination-out
@@ -105,12 +110,16 @@ export class Lighting {
     // собственный круг видимости игрока
     this.punch(player.x, player.y, TILE * 2.1, player.hidden ? 0.22 : 0.42);
 
-    // фонарик
+    // фонарик: деградирует при низком рассудке — тусклее и дрожит
     if (player.flashlightOn && !player.hidden) {
       const isUV = player.currentItem() === 'uv';
-      const r = isUV ? TILE * 4.6 : TILE * 8;
+      const sanityK = 0.72 + 0.28 * (player.sanity / 100);
+      const jitter = player.sanity < 50
+        ? Math.sin(game.time * 31) * 0.03 * (1 - player.sanity / 100)
+        : 0;
+      const r = (isUV ? TILE * 4.6 : TILE * 8) * (0.85 + 0.15 * sanityK);
       const spread = isUV ? 0.34 : 0.42;
-      this.punchCone(player.x, player.y, player.angle, spread, r, 0.95 * fl);
+      this.punchCone(player.x, player.y, player.angle + jitter, spread, r, 0.95 * fl * sanityK);
     }
 
     // лампы комнат

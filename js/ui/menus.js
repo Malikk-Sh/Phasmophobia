@@ -25,6 +25,7 @@ export const menus = {
         </div>
         <button class="menu-btn" id="m-play">НАЧАТЬ РАССЛЕДОВАНИЕ</button>
         <button class="menu-btn secondary" id="m-how">КАК ИГРАТЬ</button>
+        <button class="menu-btn secondary" id="m-fs">⛶ НА ВЕСЬ ЭКРАН</button>
         <div class="stats-line">
           КОНТРАКТЫ: ${p.contracts} · ВЕРНО: ${p.correct} · $${p.money} · СМЕРТЕЙ: ${p.deaths}
         </div>
@@ -40,6 +41,24 @@ export const menus = {
       this.showBriefing();
     });
     $('#m-how').addEventListener('click', () => { audio.init(); audio.uiClick(); this.showHow(); });
+    const fsBtn = $('#m-fs');
+    const fsSupported = document.documentElement.requestFullscreen ||
+      document.documentElement.webkitRequestFullscreen;
+    if (!fsSupported) fsBtn.style.display = 'none';
+    fsBtn.addEventListener('click', async () => {
+      audio.init(); audio.uiClick();
+      try {
+        if (document.fullscreenElement || document.webkitFullscreenElement) {
+          await (document.exitFullscreen?.() || document.webkitExitFullscreen?.());
+          fsBtn.textContent = '⛶ НА ВЕСЬ ЭКРАН';
+        } else {
+          const el = document.documentElement;
+          await (el.requestFullscreen?.({ navigationUI: 'hide' }) || el.webkitRequestFullscreen?.());
+          try { await screen.orientation?.lock?.('landscape'); } catch { /* необязательно */ }
+          fsBtn.textContent = '⛶ ВЫЙТИ ИЗ ПОЛНОЭКРАННОГО';
+        }
+      } catch { /* браузер отказал — не страшно */ }
+    });
   },
 
   showHow() {
@@ -76,8 +95,10 @@ export const menus = {
         <h2 style="letter-spacing:3px; text-align:center">КОНТРАКТ</h2>
         <p style="text-align:center; color:#5f7480; margin:4px 0 16px">ул. Уиллоу-Крик, д. 13 — одиночная смена</p>
         <div style="font-size:14px; line-height:1.8; color:#a8b8c2; max-width:440px; margin:0 auto">
-          Соседи сообщают о шуме и свете в окнах пустующего дома. Последний жилец
-          пропал без вести. Определите, что за сущность поселилась внутри.<br><br>
+          <span style="color:#8a9aa8">ДОСЬЕ:</span> ${g.dossier.name} (${g.dossier.years}) —
+          ${g.dossier.death}.<br>
+          <span style="font-style:italic; color:#7d8f9c">${g.dossier.rumor}</span><br><br>
+          Определите, что за сущность поселилась внутри, соберите улики и выживите.<br><br>
           <b>Сложность:</b> ${this.difficulty === 'pro' ? 'Профессионал (без подготовки, быстрый дренаж, ×2 награда)' : 'Любитель (2 мин подготовки)'}<br>
           <b>Задачи:</b><br>
           ${g.objectives.map(o => `— ${o.name}`).join('<br>')}

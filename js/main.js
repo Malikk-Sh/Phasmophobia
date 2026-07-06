@@ -1,6 +1,6 @@
 // ФАЗМОФОБИЯ — точка входа: игровой цикл, стейт-машина, взаимодействия.
 
-import { TILE, clamp, rndPick, dist } from './core/utils.js';
+import { TILE, clamp, rndPick, dist, hasLOS, rndRange } from './core/utils.js';
 import { input } from './core/input.js';
 import { Camera } from './core/camera.js';
 import { audio } from './core/audio.js';
@@ -92,6 +92,29 @@ const game = {
     this.setupTimer = difficulty === 'pro' ? 0 : 120;
     if (difficulty === 'pro') this.setupPhase = false;
 
+    // процедурное досье жертвы — атмосфера контракта
+    const first = rndPick(['Анна', 'Виктор', 'Ольга', 'Павел', 'Мария', 'Григорий', 'Тамара', 'Аркадий', 'Лидия', 'Семён']);
+    const last = rndPick(['Волкова', 'Черных', 'Мельников', 'Соколова', 'Громов', 'Зимина', 'Крылов', 'Одинцова'])
+      .replace(/а$/, first.endsWith('а') || first.endsWith('я') ? 'а' : '');
+    this.dossier = {
+      name: `${first} ${last}`,
+      years: `${1921 + Math.floor(Math.random() * 40)}–${1978 + Math.floor(Math.random() * 30)}`,
+      death: rndPick([
+        'найдена без признаков жизни у лестницы в подвал',
+        'пропал(а) без вести; тело так и не нашли',
+        'по заключению — остановка сердца во сне. Соседи сомневаются',
+        'несчастный случай при пожаре, который не оставил следов на доме',
+        'утонул(а) в собственной ванне при запертой изнутри двери',
+      ]),
+      rumor: rndPick([
+        'По ночам соседи слышат, как кто-то передвигает мебель.',
+        'Почтальон утверждает, что занавески шевелятся, хотя дом обесточен.',
+        'Дети говорят, что из подвала «поёт женщина».',
+        'Прошлый смотритель уволился через два дня и не забрал вещи.',
+        'В окнах второй раз за месяц видели силуэт со свечой.',
+      ]),
+    };
+
     equipment.resetContract(this);
     worldSim.initContract(this);
   },
@@ -134,6 +157,8 @@ const game = {
 
   onHuntStart() {
     audio.huntStart();
+    this.huntTime = 0;
+    try { navigator.vibrate?.([70, 50, 120]); } catch { /* нет поддержки */ }
     this.camera.shake(2.5, 1.2);
     const front = this.world.doors.find(d => d.id === this.world.frontDoorId);
     if (front) { front.locked = true; front.open = false; front.targetSwing = 0; }
@@ -210,12 +235,12 @@ const game = {
       const d2 = (pl.x - (v.x + v.w / 2)) ** 2 + (pl.y - (v.y + v.h + 6)) ** 2;
       if (d2 < (TILE * 2.2) ** 2) consider(d2, { kind: 'van', label: 'ФУРГОН' });
     }
-    // двери
+    // двери (приоритетнее прочих целей — умножаем дистанцию на 0.55)
     for (const d of this.world.doors) {
       if (d.floor !== pl.floor) continue;
       const dx = (d.tx + 0.5) * TILE - pl.x, dy = (d.ty + 0.5) * TILE - pl.y;
       const d2 = dx * dx + dy * dy;
-      if (d2 < R * R) consider(d2, { kind: 'door', door: d, label: d.locked ? 'ЗАПЕРТО' : d.open ? 'ЗАКРЫТЬ' : 'ОТКРЫТЬ' });
+      if (d2 < R * R) consider(d2 * 0.55, { kind: 'door', door: d, label: d.locked ? 'ЗАПЕРТО' : d.open ? 'ЗАКРЫТЬ' : 'ОТКРЫТЬ' });
     }
     // выключатели
     for (const room of this.world.rooms) {
@@ -264,7 +289,8 @@ const game = {
         if (d.locked) { this.log('Дверь заперта!', 'danger'); return; }
         d.open = !d.open;
         d.targetSwing = d.open ? 1 : 0;
-        audio.doorCreak(false);
+        d.open ? audio.doorOpen() : audio.doorClose();
+        pl.noise = Math.max(pl.noise, 0.5); // двери шумят
         // закрываем дверь, стоя в проёме — мягко выйти из него
         if (!d.open) {
           const cx = (d.tx + 0.5) * TILE, cy = (d.ty + 0.5) * TILE;
@@ -290,11 +316,12 @@ const game = {
       }
       case 'hide': {
         pl.hidden = act.spot;
-        // видел ли призрак, как игрок прятался
+        // видел ли призрак, как игрок прятался (нужна прямая видимость!)
         pl.hiddenSeen = this.ghost.state === 'hunt' &&
           this.ghost.floor === pl.floor &&
-          dist(this.ghost.x, this.ghost.y, pl.x, pl.y) < TILE * 6;
-        audio.doorCreak(false);
+          dist(this.ghost.x, this.ghost.y, pl.x, pl.y) < TILE * 6 &&
+          hasLOS(this.ghost.x, this.ghost.y, pl.x, pl.y, this.world.getOccluders(pl.floor));
+        audio.doorClose();
         break;
       }
       case 'pickup': {
@@ -396,13 +423,44 @@ const game = {
       if (room && room.temp < 5) this.checkObjective('freezeRead');
     }
     if (equipment.emfLevel >= 2) this.checkObjective('emfAny');
-    if (this.ghost.state === 'event') this.checkObjective('event');
+    // событие засчитывается, только если игрок его реально видел или слышал вплотную
+    if (this.ghost.state === 'event' &&
+      (this.ghost.seenByPlayer(pl) ||
+        (this.ghost.floor === pl.floor && dist(this.ghost.x, this.ghost.y, pl.x, pl.y) < TILE * 3.5))) {
+      this.checkObjective('event');
+    }
     // соль как задача
     if (this.world.saltPiles.some(s => s.disturbed && s.steps.length)) this.checkObjective('salt');
     // камера в комнате призрака
     for (const p of this.world.placed) {
       if (p.type === 'camera' &&
         this.world.roomAt(p.floor, p.x, p.y) === this.ghost.roomId) this.checkObjective('camera');
+    }
+
+    // длительность текущей охоты (для поздней подсказки на «Любителе»)
+    if (this.ghost.state === 'hunt') this.huntTime = (this.huntTime || 0) + dt;
+
+    // галлюцинации при низком рассудке: тень на краю зрения, шаги, ложный ЭМП
+    if (this.hallucination) {
+      this.hallucination.t -= dt;
+      if (this.hallucination.t <= 0) this.hallucination = null;
+    }
+    this.hallucT = (this.hallucT ?? rndRange(15, 30)) - dt;
+    if (this.hallucT <= 0) {
+      this.hallucT = rndRange(16, 34);
+      if (pl.sanity < 35 && pl.alive && this.world.isIndoors(pl.floor, pl.x, pl.y)) {
+        const r = Math.random();
+        if (r < 0.4) {
+          // тень мелькает на границе видимости
+          const a = pl.angle + rndRange(-1.1, 1.1);
+          this.hallucination = {
+            x: pl.x + Math.cos(a) * TILE * 5.5,
+            y: pl.y + Math.sin(a) * TILE * 5.5,
+            floor: pl.floor, t: 0.7, max: 0.7,
+          };
+        } else if (r < 0.7) audio.phantomSteps();
+        else equipment.fakeEmfT = 1.2; // ложный всплеск на приборе
+      }
     }
 
     // гроза: случайные молнии с громом

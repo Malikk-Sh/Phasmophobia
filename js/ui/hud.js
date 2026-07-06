@@ -95,10 +95,13 @@ export const hud = {
     // фонарик
     $('#btn-flash').classList.toggle('off', !pl.flashlightOn);
 
-    // таймер подготовки / охота
+    // таймер подготовки. Охота НЕ объявляется текстом — о ней говорят
+    // мерцающий фонарик, помехи приборов и сердцебиение.
+    // На «Любителе» спустя несколько секунд появляется скромная пиктограмма.
     const st = $('#setup-timer');
-    if (game.ghost && game.ghost.state === 'hunt') {
-      st.textContent = '⚠ ОХОТА — ПРЯЧЬТЕСЬ ⚠';
+    if (game.ghost && game.ghost.state === 'hunt' &&
+      game.difficulty === 'amateur' && (game.huntTime || 0) > 5) {
+      st.textContent = '⚠';
       st.classList.add('hunt-warn');
     } else if (game.setupPhase) {
       st.textContent = `Подготовка: ${fmtTime(game.setupTimer)}`;

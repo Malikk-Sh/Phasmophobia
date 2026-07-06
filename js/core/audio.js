@@ -226,6 +226,78 @@ export const audio = {
     }
   },
 
+  doorOpen() {
+    if (!this.ready) return;
+    // щёлк ручки → протяжный скрип петель с неровным ходом
+    noise({ dur: 0.035, type: 'highpass', freq: 2600, gain: 0.09, attack: 0.002 });
+    setTimeout(() => {
+      if (!started) return;
+      const f = 130 + Math.random() * 60;
+      tone({ type: 'sawtooth', freq: f, slide: f * 2.1, dur: 0.75, gain: 0.022, vib: 26, vibRate: 3.2, attack: 0.06 });
+      tone({ type: 'sawtooth', freq: f * 1.5, slide: f * 2.6, dur: 0.55, gain: 0.009, vib: 40, vibRate: 5.1, attack: 0.1 });
+      noise({ dur: 0.6, type: 'bandpass', freq: 480, q: 2.5, gain: 0.014, attack: 0.08, rate: 0.7 });
+    }, 70);
+  },
+
+  doorClose() {
+    if (!this.ready) return;
+    // короткий скрип → глухой деревянный удар о косяк → щелчок защёлки
+    const f = 190 + Math.random() * 50;
+    tone({ type: 'sawtooth', freq: f * 1.8, slide: f, dur: 0.28, gain: 0.016, vib: 24, vibRate: 4, attack: 0.03 });
+    noise({ dur: 0.22, type: 'bandpass', freq: 420, q: 2, gain: 0.012, attack: 0.03, rate: 0.7 });
+    setTimeout(() => {
+      if (!started) return;
+      noise({ dur: 0.09, type: 'lowpass', freq: 220, gain: 0.2, attack: 0.003 });
+      tone({ type: 'sine', freq: 95, slide: 52, dur: 0.11, gain: 0.16, attack: 0.003 });
+    }, 240);
+    setTimeout(() => started && noise({ dur: 0.03, type: 'highpass', freq: 3000, gain: 0.07, attack: 0.002 }), 360);
+  },
+
+  closetKnock() {
+    if (!this.ready) return;
+    // два приглушённых удара по дверце укрытия — совсем рядом
+    for (const [t, g] of [[0, 0.16], [220, 0.2]]) {
+      setTimeout(() => {
+        if (!started) return;
+        noise({ dur: 0.07, type: 'lowpass', freq: 320, gain: g, attack: 0.002 });
+        tone({ type: 'sine', freq: 140, slide: 70, dur: 0.09, gain: g * 0.7, attack: 0.002 });
+      }, t);
+    }
+  },
+
+  knockRaps(pan = 0) {
+    if (!this.ready) return;
+    // три медленных стука из другой комнаты
+    for (let i = 0; i < 3; i++) {
+      setTimeout(() => {
+        if (!started) return;
+        noise({ dur: 0.06, type: 'lowpass', freq: 260, gain: 0.12, attack: 0.003, pan });
+        tone({ type: 'sine', freq: 110, slide: 60, dur: 0.1, gain: 0.09, attack: 0.003, pan });
+      }, i * 480 + Math.random() * 90);
+    }
+  },
+
+  phantomSteps() {
+    if (!this.ready) return;
+    // шаги, которых нет: 3-4 глухих шага со сменой панорамы
+    const pan = Math.random() * 1.2 - 0.6;
+    const n = 3 + (Math.random() * 2 | 0);
+    for (let i = 0; i < n; i++) {
+      setTimeout(() => started && noise({
+        dur: 0.08, type: 'lowpass', freq: 240, gain: 0.05,
+        rate: 0.7, pan: pan + i * 0.12,
+      }), i * 420);
+    }
+  },
+
+  falseHuntCue() {
+    if (!this.ready) return;
+    // обманка: короткий провал гула + помехи, будто начинается охота
+    tone({ type: 'sine', freq: 74, slide: 38, dur: 1.2, gain: 0.1 });
+    noise({ dur: 1.1, freq: 120, type: 'lowpass', gain: 0.07, freqEnd: 260, attack: 0.3 });
+    setTimeout(() => started && noise({ dur: 0.5, type: 'bandpass', freq: 1400, q: 2, gain: 0.04 }), 500);
+  },
+
   switchClick() { if (this.ready) noise({ dur: 0.04, type: 'highpass', freq: 1800, gain: 0.12 }); },
   uiClick() { if (this.ready) tone({ type: 'sine', freq: 660, dur: 0.05, gain: 0.05 }); },
 

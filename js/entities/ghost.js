@@ -39,6 +39,10 @@ export class Ghost {
     this.smudgedT = 0;
     this.dotsFlash = 0;
     this.eventCount = 0;
+    this.eventType = null;
+    this.lastEventType = null;
+    this.fakeHuntT = 0;
+    this.lingerT = 0;
     this.activity = 0;      // 0..10 для датчика в фургоне
     this.sway = Math.random() * 10;
     this.speed = 40;
@@ -54,6 +58,8 @@ export class Ghost {
     this.huntCooldown -= dt;
     this.smudgedT = Math.max(0, this.smudgedT - dt);
     this.dotsFlash = Math.max(0, this.dotsFlash - dt);
+    this.fakeHuntT = Math.max(0, this.fakeHuntT - dt);
+    this.lingerT = Math.max(0, this.lingerT - dt);
     this.activity = Math.max(0, this.activity - dt * 0.35);
     this.sway += dt;
 
@@ -78,14 +84,35 @@ export class Ghost {
         break;
 
       case 'event': {
-        this.targetAlpha = this.form === 'shadow' ? 0.55 : 0.8;
-        // медленно плывёт к игроку
-        if (pl.floor === this.floor && !pl.hidden) {
-          const a = angleTo(this.x, this.y, pl.x, pl.y);
-          this.x += Math.cos(a) * 14 * dt;
-          this.y += Math.sin(a) * 14 * dt;
+        const type = this.eventType || 'manifest';
+        if (type === 'manifest') {
+          this.targetAlpha = this.form === 'shadow' ? 0.55 : 0.8;
+          // медленно плывёт к игроку
+          if (pl.floor === this.floor && !pl.hidden) {
+            const a = angleTo(this.x, this.y, pl.x, pl.y);
+            this.x += Math.cos(a) * 14 * dt;
+            this.y += Math.sin(a) * 14 * dt;
+          }
+          if (Math.random() < dt * 2) game.fx.ghostTrail(this.x, this.y, this.floor);
+        } else if (type === 'silhouette') {
+          // неподвижный силуэт: исчезает, если подойти или посветить в упор
+          this.targetAlpha = 0.55;
+          const d = Math.hypot(pl.x - this.x, pl.y - this.y);
+          let lit = false;
+          if (pl.flashlightOn && d < TILE * 3.6) {
+            const da = Math.abs(((Math.atan2(this.y - pl.y, this.x - pl.x) - pl.angle + Math.PI * 3) % (Math.PI * 2)) - Math.PI);
+            lit = da < 0.3;
+          }
+          if (d < TILE * 1.6 || lit) {
+            audio.whisper();
+            game.fx.dustBurst(this.x, this.y, this.floor);
+            this.endEvent(game);
+            break;
+          }
+        } else {
+          // lightsOut / knock / falseHunt — невидимые, чисто сенсорные
+          this.targetAlpha = 0;
         }
-        if (Math.random() < dt * 2) game.fx.ghostTrail(this.x, this.y, this.floor);
         // дренаж рассудка при взгляде
         if (this.seenByPlayer(pl)) {
           const mult = this.tr.gazeDrain || 1;
@@ -142,7 +169,7 @@ export class Ghost {
     else if (roll < 0.62 && this.tr.breakerOff && this.world.breaker.on) this.turnOffBreaker(game);
     else if (roll < 0.72) this.tryWrite(game);
     else if (roll < 0.72 + 0.1 + aggr * 0.2) {
-      if (!game.setupPhase && playerNear !== null) this.startEvent(game);
+      if (!game.setupPhase && playerNear) this.startEvent(game);
     } else if (this.tr.teleport && Math.random() < 0.25 && !game.setupPhase) {
       this.teleportNearPlayer(game);
     }
@@ -249,13 +276,63 @@ export class Ghost {
   }
 
   startEvent(game) {
+    const pl = game.player;
+    // выбор типа события — чтобы дом не превращался в равномерный генератор
+    const roll = Math.random();
+    let type;
+    if (roll < 0.30) type = 'manifest';
+    else if (roll < 0.52) type = 'silhouette';
+    else if (roll < 0.67) type = 'lightsOut';
+    else if (roll < 0.83) type = 'knock';
+    else type = 'falseHunt';
+    // повторы скучны — не делать одно и то же дважды подряд
+    if (type === this.lastEventType) type = 'manifest';
+    this.lastEventType = type;
+    this.eventType = type;
+
     this.state = 'event';
-    this.stateT = rndRange(3, 6);
     this.eventCount++;
     this.path = null;
-    audio.ghostEvent(this.form);
-    game.player.drainSanity(rndRange(4, 8) * (this.tr.eventDrain || 1));
     this.activity = Math.min(10, this.activity + 4);
+
+    if (type === 'manifest') {
+      this.stateT = rndRange(3, 6);
+      audio.ghostEvent(this.form);
+      pl.drainSanity(rndRange(4, 8) * (this.tr.eventDrain || 1));
+    } else if (type === 'silhouette') {
+      // возникнуть в поле зрения на границе света и стоять неподвижно
+      this.stateT = rndRange(4, 7);
+      const a = pl.angle + rndRange(-0.9, 0.9);
+      for (let r = 6; r >= 3; r--) {
+        const nx = pl.x + Math.cos(a) * TILE * r, ny = pl.y + Math.sin(a) * TILE * r;
+        if (this.world.isWalkableAI(pl.floor, Math.floor(nx / TILE), Math.floor(ny / TILE))) {
+          this.floor = pl.floor; this.x = nx; this.y = ny;
+          break;
+        }
+      }
+      audio.whisper();
+      pl.drainSanity(rndRange(2, 5));
+    } else if (type === 'lightsOut') {
+      // погасить свет в комнате игрока (и в своей)
+      this.stateT = 1.2;
+      const room = this.world.roomById(this.world.roomAt(pl.floor, pl.x, pl.y));
+      if (room) room.lightOn = false;
+      this.room.lightOn = false;
+      audio.switchClick();
+      audio.ghostEvent('shadow');
+      pl.drainSanity(rndRange(2, 4));
+    } else if (type === 'knock') {
+      // стук со стороны призрака — игрок только слышит
+      this.stateT = 2.2;
+      const pan = Math.max(-0.8, Math.min(0.8, (this.x - pl.x) / (TILE * 10)));
+      audio.knockRaps(pan);
+      this.emitEMF(2);
+    } else { // falseHunt — обманка: электроника сходит с ума, но охоты нет
+      this.stateT = rndRange(2.5, 3.5);
+      this.fakeHuntT = this.stateT;
+      audio.falseHuntCue();
+      pl.drainSanity(rndRange(1, 3));
+    }
     if (this.tr.wail && Math.random() < 0.5) audio.bansheeWail();
   }
 
@@ -332,12 +409,27 @@ export class Ghost {
 
     const sameFloor = pl.floor === this.floor;
     const occ = this.world.getOccluders(this.floor);
+
+    // психологическое давление: проходя мимо укрытия с игроком,
+    // призрак может замереть рядом и постучать по дверце
+    if (sameFloor && pl.hidden) {
+      const dh = Math.hypot(pl.hidden.x - this.x, pl.hidden.y - this.y);
+      if (dh < TILE * 2.2 && this.lingerT <= 0 && Math.random() < dt * 0.5) {
+        this.lingerT = 1.9;
+        audio.closetKnock();
+        pl.drainSanity(3);
+      }
+    }
+
     let sees = false;
     if (sameFloor && !pl.hidden && pl.alive) {
       const d = Math.hypot(pl.x - this.x, pl.y - this.y);
       if (d < TILE * 11 && hasLOS(this.x, this.y, pl.x, pl.y, occ)) sees = true;
-      // слух
+      // слух: шаги и двери; электроника тоже выдаёт —
+      // шипящий спиритбокс слышно, фонарик заметен чуть дальше прямой видимости
       if (pl.noise > 0.4 && d < TILE * 9) this.lastKnown = { x: pl.x, y: pl.y };
+      if (pl.currentItem() === 'spirit' && d < TILE * 7) this.lastKnown = { x: pl.x, y: pl.y };
+      if (pl.flashlightOn && d < TILE * 5 && Math.random() < dt * 2) this.lastKnown = { x: pl.x, y: pl.y };
     }
     // Банши идёт к жертве всегда
     if (this.tr.stalker && sameFloor && !pl.hidden) this.lastKnown = { x: pl.x, y: pl.y };
@@ -345,6 +437,8 @@ export class Ghost {
     let speed;
     if (this.tr.slowSpeed !== undefined) {
       speed = sees ? this.tr.fastSpeed : this.tr.slowSpeed;
+    } else if (this.lingerT > 0) {
+      speed = 12; // замер у укрытия
     } else {
       speed = this.huntBaseSpeed;
       if (sees) {
@@ -395,10 +489,13 @@ export class Ghost {
 
   smudge(game) {
     const mult = this.tr.smudgeMult || 1;
-    this.smudgedT = 6 * mult;
+    // благовония ослепляют, но НЕ отменяют охоту — призрак теряет след
+    this.smudgedT = 5 * mult;
+    this.lastKnown = null;
+    this.path = null;
     if (this.state === 'hunt') {
-      if (this.tr.smudgeInstant || true) this.endHunt(game);
-      this.huntCooldown = Math.max(this.huntCooldown, 8 * mult);
+      if (this.tr.smudgeInstant) this.endHunt(game); // только Онрё боится огня
+      else this.pickWanderTarget(true);
       game.stats.smudgeSaves++;
     }
     this.activity = Math.min(10, this.activity + 2);

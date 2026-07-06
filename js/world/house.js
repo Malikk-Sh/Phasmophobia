@@ -205,7 +205,8 @@ export function buildWorld() {
   lampAt(kitchen, 28.5, 9.5); switchAt(kitchen, 26.3, 12.4);
   lampAt(dining, 36.5, 9.5); switchAt(dining, 37.3, 12.4);
   lampAt(hall, 16, 15.5); lampAt(hall, 25.5, 15.5); lampAt(hall, 34, 15.5);
-  switchAt(hall, 11.7, 15.5);
+  // не ставить рядом с входной дверью (10,15) — перехватывает кнопку действия
+  switchAt(hall, 13.2, 14.4);
   lampAt(master, 14.5, 21); switchAt(master, 15.3, 17.6);
   lampAt(bath, 21, 21); switchAt(bath, 21.3, 17.6);
   lampAt(living, 29, 20.5); switchAt(living, 30.6, 17.6);
