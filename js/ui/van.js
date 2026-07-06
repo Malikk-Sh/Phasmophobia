@@ -28,6 +28,7 @@ export const van = {
           <div class="van-col">
             <div class="van-h">Снаряжение (нажмите, чтобы взять в слот)</div>
             <div class="gear-grid" id="gear-grid"></div>
+            <div id="gear-desc">Коснитесь предмета, чтобы прочитать описание.</div>
             <div class="van-h">Действия</div>
             <button class="menu-btn" id="van-close">ИДТИ РАССЛЕДОВАТЬ</button>
             <button class="menu-btn secondary" id="van-finish">ЗАВЕРШИТЬ КОНТРАКТ И УЕХАТЬ</button>
@@ -63,6 +64,7 @@ export const van = {
     grid.querySelectorAll('.gear-item').forEach(b => {
       b.addEventListener('click', () => {
         const key = b.dataset.k;
+        const it = ITEMS[key];
         const inv = g.player.inventory;
         const idx = inv.indexOf(key);
         if (idx >= 0) { inv[idx] = null; } // убрать из слота
@@ -73,6 +75,8 @@ export const van = {
         }
         audio.uiClick();
         this.renderGear();
+        const d = $('#gear-desc');
+        if (d) d.innerHTML = `<b>${it.icon} ${it.name}.</b> ${it.desc}`;
       });
     });
   },

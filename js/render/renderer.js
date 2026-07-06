@@ -122,6 +122,10 @@ export class Renderer {
       c.stroke();
     }
 
+    // пороги, плинтусы и детали интерьера
+    this.paintThresholds(c, 0);
+    this.paintDetails(c, 0, rng);
+
     // кусты
     for (const b of this.world.exterior.bushes) {
       c.fillStyle = 'rgba(0,0,0,.3)';
@@ -167,8 +171,159 @@ export class Renderer {
     c.beginPath(); c.moveTo(16.2 * TILE, 3.4 * TILE); c.lineTo(26.6 * TILE, 3.4 * TILE); c.stroke();
     c.strokeStyle = '#443c34'; c.lineWidth = 3;
     c.beginPath(); c.moveTo(16.2 * TILE, 3.7 * TILE); c.lineTo(26.6 * TILE, 3.7 * TILE); c.stroke();
+    this.paintThresholds(c, FLOOR_BASEMENT);
+    this.paintDetails(c, FLOOR_BASEMENT, rng);
     for (const f of this.world.furniture[FLOOR_BASEMENT]) drawFurnitureItem(c, f);
     return cv;
+  }
+
+  // деревянные пороги в дверных проёмах
+  paintThresholds(c, floor) {
+    for (const d of this.world.doors) {
+      if (d.floor !== floor) continue;
+      const x = d.tx * TILE, y = d.ty * TILE;
+      c.fillStyle = '#33281a';
+      c.fillRect(x, y, TILE, TILE);
+      c.strokeStyle = 'rgba(0,0,0,.35)';
+      c.lineWidth = 1;
+      for (let i = 1; i < 4; i++) {
+        c.beginPath();
+        if (d.orient === 'h') { c.moveTo(x, y + i * 8); c.lineTo(x + TILE, y + i * 8); }
+        else { c.moveTo(x + i * 8, y); c.lineTo(x + i * 8, y + TILE); }
+        c.stroke();
+      }
+      c.fillStyle = 'rgba(255,235,190,.05)';
+      c.fillRect(x + 2, y + 2, TILE - 4, TILE - 4);
+    }
+  }
+
+  // детали: плинтусы, светильники, паутина, ковры-мелочи, картины…
+  paintDetails(c, floor, rng) {
+    // плинтусы по периметру комнат
+    for (const room of this.world.rooms) {
+      if (room.floor !== floor) continue;
+      for (const r of room.rects) {
+        c.strokeStyle = 'rgba(12,10,8,.4)';
+        c.lineWidth = 2.5;
+        c.strokeRect(r.x * TILE + 1.5, r.y * TILE + 1.5, r.w * TILE - 3, r.h * TILE - 3);
+      }
+      // потолочные светильники (плафон виден всегда)
+      for (const l of room.lamps) {
+        c.fillStyle = 'rgba(0,0,0,.3)';
+        c.beginPath(); c.arc(l.x + 1.5, l.y + 2, 5.5, 0, 7); c.fill();
+        c.fillStyle = floor === FLOOR_BASEMENT ? '#3a352c' : '#57504a';
+        c.beginPath(); c.arc(l.x, l.y, 5, 0, 7); c.fill();
+        c.fillStyle = '#c9bd96';
+        c.beginPath(); c.arc(l.x, l.y, 2.4, 0, 7); c.fill();
+      }
+    }
+
+    if (floor === 0) {
+      // шторы у окон (короткие тканевые «язычки» с внутренней стороны)
+      c.fillStyle = '#3f3a4e';
+      for (const w of this.world.windows) {
+        const x = w.tx * TILE, y = w.ty * TILE;
+        if (w.orient === 'h') {
+          const iy = w.ty === 5 ? y + TILE : y - 6; // интерьер снизу/сверху
+          c.fillRect(x + 2, iy, 8, 6);
+          c.fillRect(x + TILE - 10, iy, 8, 6);
+        } else {
+          const ix = w.tx === 10 ? x + TILE : x - 6;
+          c.fillRect(ix, y + 2, 6, 8);
+          c.fillRect(ix, y + TILE - 10, 6, 8);
+        }
+      }
+      // картины на стенах коридора и спален
+      const frames = [[17.3, 13], [23.2, 13], [31.4, 13], [21.6, 17], [33.2, 17], [12.4, 17]];
+      const art = ['#31424a', '#4a3535', '#3c4a35', '#42394f', '#4a4231', '#35404a'];
+      frames.forEach(([fx, fy], i) => {
+        const x = fx * TILE, y = fy * TILE + TILE / 2 - 5;
+        c.fillStyle = '#5c4a28';
+        c.fillRect(x, y, 14, 10);
+        c.fillStyle = art[i % art.length];
+        c.fillRect(x + 1.5, y + 1.5, 11, 7);
+        c.fillStyle = 'rgba(255,255,255,.12)';
+        c.fillRect(x + 2, y + 2, 4, 2.5);
+      });
+      // коврики: у входной двери и в ванной
+      c.fillStyle = '#4c3d26';
+      c.fillRect(9.05 * TILE, 15.08 * TILE, 0.85 * TILE, 0.84 * TILE);
+      c.strokeStyle = 'rgba(0,0,0,.4)'; c.lineWidth = 1.5;
+      c.strokeRect(9.13 * TILE, 15.16 * TILE, 0.69 * TILE, 0.68 * TILE);
+      c.fillStyle = '#57493a';
+      c.fillRect(11.1 * TILE, 15.1 * TILE, 0.8 * TILE, 0.8 * TILE);
+      c.fillStyle = '#8ea0a8'; // мягкий коврик у ванны
+      c.beginPath(); c.ellipse(20.4 * TILE, 20.8 * TILE, 13, 8, 0, 0, 7); c.fill();
+      // пятно масла под машиной
+      c.fillStyle = 'rgba(10,10,12,.5)';
+      c.beginPath(); c.ellipse(12.7 * TILE, 10.2 * TILE, 20, 12, 0.3, 0, 7); c.fill();
+      // паутина в углах гаража
+      this.cobweb(c, 11 * TILE, 6 * TILE, 1);
+      this.cobweb(c, 19 * TILE, 6 * TILE, -1);
+      // навесные шкафчики кухни вдоль северной стены
+      c.fillStyle = 'rgba(30,24,16,.55)';
+      c.fillRect(25.1 * TILE, 6 * TILE, 2.2 * TILE, 9);
+      c.fillRect(28.9 * TILE, 6 * TILE, 1.8 * TILE, 9);
+      c.strokeStyle = 'rgba(0,0,0,.5)'; c.lineWidth = 1;
+      for (const bx of [25.8, 26.6, 29.5, 30.2]) {
+        c.beginPath(); c.moveTo(bx * TILE, 6 * TILE + 1); c.lineTo(bx * TILE, 6 * TILE + 8); c.stroke();
+      }
+      // клумбы вдоль южной стены дома
+      for (const [bx, bw] of [[12, 3.4], [29.5, 3.6]]) {
+        c.fillStyle = '#241d14';
+        c.beginPath();
+        c.roundRect ? c.roundRect(bx * TILE, 25.15 * TILE, bw * TILE, 14, 6) : c.rect(bx * TILE, 25.15 * TILE, bw * TILE, 14);
+        c.fill();
+        for (let i = 0; i < bw * 3; i++) {
+          c.fillStyle = ['#5a6a7a', '#6a5a72', '#7a7060'][i % 3];
+          c.beginPath();
+          c.arc((bx + 0.25 + (i * 0.32)) * TILE, 25.15 * TILE + 5 + (i % 2) * 5, 2.2, 0, 7);
+          c.fill();
+        }
+      }
+    } else {
+      // подвал: паутина в углах, разбросанные бумаги, перфопанель с инструментом
+      this.cobweb(c, 3 * TILE, 3 * TILE, 1);
+      this.cobweb(c, 15 * TILE, 3 * TILE, -1);
+      this.cobweb(c, 16 * TILE, 3 * TILE, 1);
+      this.cobweb(c, 27 * TILE, 3 * TILE, -1);
+      this.cobweb(c, 3 * TILE, 10 * TILE, 1);
+      c.fillStyle = 'rgba(180,175,160,.14)';
+      for (let i = 0; i < 8; i++) {
+        c.save();
+        c.translate((4 + rng() * 20) * TILE, (5 + rng() * 8) * TILE);
+        c.rotate(rng() * 3);
+        c.fillRect(-4, -3, 8, 6);
+        c.restore();
+      }
+      // перфопанель над верстаком мастерской
+      c.fillStyle = '#3a2f22';
+      c.fillRect(3.4 * TILE, 9.2 * TILE, 2.5 * TILE, 0.65 * TILE);
+      c.fillStyle = '#8a8f94';
+      c.fillRect(3.6 * TILE, 9.35 * TILE, 3, 10);
+      c.fillRect(4.1 * TILE, 9.4 * TILE, 8, 3);
+      c.fillStyle = '#6b4226';
+      c.fillRect(4.8 * TILE, 9.33 * TILE, 3, 11);
+      c.fillStyle = '#5a5f64';
+      c.beginPath(); c.arc(5.5 * TILE, 9.5 * TILE, 4, 0, 7); c.stroke();
+    }
+  }
+
+  cobweb(c, x, y, dir) {
+    c.strokeStyle = 'rgba(210,215,225,.10)';
+    c.lineWidth = 1;
+    for (let i = 0; i <= 4; i++) {
+      const a = (dir > 0 ? 0 : Math.PI / 2) + (i / 4) * Math.PI / 2;
+      c.beginPath();
+      c.moveTo(x, y);
+      c.lineTo(x + Math.cos(a) * 22 * dir, y + Math.sin(a) * 22);
+      c.stroke();
+    }
+    for (const r of [9, 16]) {
+      c.beginPath();
+      c.arc(x, y, r, dir > 0 ? 0 : Math.PI / 2, dir > 0 ? Math.PI / 2 : Math.PI);
+      c.stroke();
+    }
   }
 
   paintRoomFloors(c, floor, rng) {
@@ -297,6 +452,22 @@ export class Renderer {
 
     // статика
     ctx.drawImage(this.static[floor], 0, 0);
+
+    // тёплое свечение включённых ламп (под слоем тьмы)
+    if (world.breaker.on) {
+      for (const room of world.rooms) {
+        if (room.floor !== floor || !room.lightOn || room.lightBroken) continue;
+        for (const l of room.lamps) {
+          const g = ctx.createRadialGradient(l.x, l.y, 2, l.x, l.y, TILE * 2.4);
+          g.addColorStop(0, 'rgba(255,214,140,.18)');
+          g.addColorStop(1, 'rgba(255,214,140,0)');
+          ctx.fillStyle = g;
+          ctx.beginPath(); ctx.arc(l.x, l.y, TILE * 2.4, 0, 7); ctx.fill();
+          ctx.fillStyle = 'rgba(255,240,200,.85)';
+          ctx.beginPath(); ctx.arc(l.x, l.y, 2.6, 0, 7); ctx.fill();
+        }
+      }
+    }
 
     // соль и отпечатки
     for (const s of world.saltPiles) {

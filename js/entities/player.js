@@ -104,20 +104,23 @@ export class Player {
 
   collides(x, y) {
     const w = this.world;
+    // препятствия, в которых игрок УЖЕ стоит (закрылась дверь и т.п.),
+    // не мешают выйти — иначе можно застрять навсегда
+    const hitCircle = (px, py, rx, ry, rw, rh) => {
+      const cx = clamp(px, rx, rx + rw);
+      const cy = clamp(py, ry, ry + rh);
+      return (cx - px) ** 2 + (cy - py) ** 2 < RADIUS * RADIUS;
+    };
     const minTx = Math.floor((x - RADIUS) / TILE), maxTx = Math.floor((x + RADIUS) / TILE);
     const minTy = Math.floor((y - RADIUS) / TILE), maxTy = Math.floor((y + RADIUS) / TILE);
     for (let ty = minTy; ty <= maxTy; ty++)
       for (let tx = minTx; tx <= maxTx; tx++)
-        if (w.isBlocked(this.floor, tx, ty)) {
-          // точная проверка круг-тайл
-          const cx = clamp(x, tx * TILE, tx * TILE + TILE);
-          const cy = clamp(y, ty * TILE, ty * TILE + TILE);
-          if ((cx - x) ** 2 + (cy - y) ** 2 < RADIUS * RADIUS) return true;
-        }
+        if (w.isBlocked(this.floor, tx, ty) &&
+          hitCircle(x, y, tx * TILE, ty * TILE, TILE, TILE) &&
+          !hitCircle(this.x, this.y, tx * TILE, ty * TILE, TILE, TILE)) return true;
     for (const r of w.colliders[this.floor] || []) {
-      const cx = clamp(x, r.x, r.x + r.w);
-      const cy = clamp(y, r.y, r.y + r.h);
-      if ((cx - x) ** 2 + (cy - y) ** 2 < RADIUS * RADIUS) return true;
+      if (hitCircle(x, y, r.x, r.y, r.w, r.h) &&
+        !hitCircle(this.x, this.y, r.x, r.y, r.w, r.h)) return true;
     }
     return false;
   }

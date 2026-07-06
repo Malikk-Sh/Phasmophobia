@@ -274,8 +274,10 @@ export function buildWorld() {
       if (floor === 0 && f.roomAt(tx, ty) === OUTSIDE && !this.doorAt(floor, tx, ty)) return false;
       return true;
     },
-    // сегменты-окклюдеры (стены + закрытые двери + высокая мебель) для этажа
-    getOccluders(floor) {
+    // сегменты-окклюдеры для этажа.
+    // includeFurniture=true — для ИИ (LOS призрака); false — для визуального
+    // тумана войны, чтобы шкафы не превращались в чёрные дыры.
+    getOccluders(floor, includeFurniture = true) {
       const f = floors[floor];
       const segs = f.segs.slice();
       for (const d of doors) {
@@ -284,7 +286,9 @@ export function buildWorld() {
         if (d.orient === 'h') segs.push({ x1: x, y1: y + TILE / 2, x2: x + TILE, y2: y + TILE / 2 });
         else segs.push({ x1: x + TILE / 2, y1: y, x2: x + TILE / 2, y2: y + TILE });
       }
-      for (const fu of (this.tallOccluders?.[floor] || [])) segs.push(fu);
+      if (includeFurniture) {
+        for (const fu of (this.tallOccluders?.[floor] || [])) segs.push(fu);
+      }
       return segs;
     },
   };
