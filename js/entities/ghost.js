@@ -43,6 +43,12 @@ export class Ghost {
     this.lastEventType = null;
     this.fakeHuntT = 0;
     this.lingerT = 0;
+    this.huntPhase = null;   // warn → search → chase
+    this.warnT = 0;
+    this.searchTarget = null;
+    this.loseLosT = 0;
+    this.migrated = false;   // сменил ли любимую комнату (раз за контракт)
+    this.memory = { hideSpot: null }; // память о прошлых охотах
     this.activity = 0;      // 0..10 для датчика в фургоне
     this.sway = Math.random() * 10;
     this.speed = 40;
@@ -146,32 +152,82 @@ export class Ghost {
   }
 
   // ---------- Решения ----------
+  // Что делать — подсказывает режиссёр напряжения: в затишье дом молчит,
+  // в предвестии слышны дальние звуки, в подозрении — возня рядом,
+  // в проявлении — событие или охота, в разрядке — ничего.
   decideAction(game) {
-    const aggr = game.aggression; // 0..1 (растёт при падении рассудка)
+    const dir = game.director;
     const shy = this.tr.shy;
     const pl = game.player;
     const playerNear = pl.floor === this.floor &&
       Math.hypot(pl.x - this.x, pl.y - this.y) < TILE * 7;
 
-    this.actionT = rndRange(3.5, 9) * (shy ? 1.8 : 1) * (1 - aggr * 0.5);
+    const phase = (game.setupPhase || !dir) ? 'calm' : dir.phase;
+    this.actionT = (phase === 'omen' || phase === 'reveal')
+      ? rndRange(1.5, 3)
+      : rndRange(3.5, 8) * (shy ? 1.8 : 1);
 
     // Тень избегает активности рядом с игроком
     if (shy && playerNear && Math.random() < 0.7) return;
 
-    const roll = Math.random();
+    switch (phase) {
+      case 'calm':
+        // почти ничего: редкий дальний предмет, чтобы дом «дышал»
+        if (Math.random() < 0.22 && dir?.allow('prop', 14, game)) {
+          this.interactProp(game, { farFromPlayer: true });
+          dir?.note('prop', game);
+        }
+        break;
 
-    // попытка охоты (проверяется и здесь)
-    if (game.canHunt() && this.tryStartHunt(game)) return;
+      case 'omen': {
+        // один предвестник — и снова тишина
+        if (dir && !dir.allow('omen', 7, game)) break;
+        const r = Math.random();
+        if (r < 0.3 && dir.allow('door', 20, game)) {
+          this.interactDoor(game);
+          dir.note('door', game);
+        } else if (r < 0.55 && dir.allow('switch', 18, game)) {
+          this.interactSwitch(game);
+          dir.note('switch', game);
+        } else if (r < 0.65 && this.tr.breakerOff && this.world.breaker.on) {
+          this.turnOffBreaker(game);
+        } else {
+          // стук откуда-то из дома
+          const pan = Math.max(-0.8, Math.min(0.8, (this.x - pl.x) / (TILE * 10)));
+          audio.knockRaps(pan);
+          this.emitEMF(2);
+        }
+        dir.note('omen', game);
+        break;
+      }
 
-    if (roll < 0.32) this.interactProp(game);
-    else if (roll < 0.48) this.interactDoor(game);
-    else if (roll < 0.58) this.interactSwitch(game);
-    else if (roll < 0.62 && this.tr.breakerOff && this.world.breaker.on) this.turnOffBreaker(game);
-    else if (roll < 0.72) this.tryWrite(game);
-    else if (roll < 0.72 + 0.1 + aggr * 0.2) {
-      if (!game.setupPhase && playerNear) this.startEvent(game);
-    } else if (this.tr.teleport && Math.random() < 0.25 && !game.setupPhase) {
-      this.teleportNearPlayer(game);
+      case 'suspicion': {
+        // возня и слабые показания приборов рядом с игроком
+        const r = Math.random();
+        if (r < 0.4 && dir?.allow('prop', 10, game)) {
+          this.interactProp(game);
+          dir?.note('prop', game);
+        } else if (r < 0.6) this.tryWrite(game);
+        else if (r < 0.75 && dir?.allow('switch', 15, game)) {
+          this.interactSwitch(game);
+          dir?.note('switch', game);
+        } else if (this.tr.teleport && Math.random() < 0.4) {
+          this.teleportNearPlayer(game);
+        } else this.emitEMF(2);
+        break;
+      }
+
+      case 'reveal':
+        // кульминация: охота либо событие
+        if (game.canHunt() && this.tryStartHunt(game)) return;
+        if (playerNear && dir?.allow('event', 22, game)) {
+          this.startEvent(game);
+          dir?.note('event', game);
+        }
+        break;
+
+      default: // release — дом отдыхает
+        break;
     }
   }
 
@@ -189,10 +245,14 @@ export class Ghost {
     }
   }
 
-  interactProp(game) {
+  interactProp(game, { farFromPlayer = false } = {}) {
+    const pl = game.player;
     const props = this.world.props.filter(p =>
       p.floor === this.floor && !p.held &&
-      Math.hypot(p.x - this.x, p.y - this.y) < TILE * 6);
+      Math.hypot(p.x - this.x, p.y - this.y) < TILE * 6 &&
+      // в затишье призрак гремит вдали от игрока — звук «из другой части дома»
+      (!farFromPlayer || pl.floor !== p.floor ||
+        Math.hypot(p.x - pl.x, p.y - pl.y) > TILE * 6));
     if (!props.length) return;
     const throwOne = (p) => {
       const power = (this.tr.throwMult || 1) * rndRange(60, 140);
@@ -359,6 +419,10 @@ export class Ghost {
     if ((this.huntCooldown > 0 && !force) || game.setupPhase) return false;
     const pl = game.player;
     if (!this.world.isIndoors(pl.floor, pl.x, pl.y)) return false; // на улице не охотится
+    // режиссёр: охота — кульминация, не случайный бросок посреди затишья
+    // (Демон со своей случайной охотой — исключение)
+    const dir = game.director;
+    if (!force && dir && dir.phase !== 'reveal' && dir.score < 0.75 && !this.tr.randomHunt) return false;
     const th = this.huntThreshold(game);
     let ok = pl.sanity <= th;
     if (this.tr.randomHunt && Math.random() < 0.12) ok = true;
@@ -382,8 +446,14 @@ export class Ghost {
 
     this.state = 'hunt';
     this.huntT = rndRange(22, 32);
-    this.graceT = 2.6;
+    // фаза 1 — «предупреждение»: электроника сходит с ума, призрак ещё не идёт.
+    // Длится по-разному у разных сущностей (скрытая характеристика).
+    this.huntPhase = 'warn';
+    this.warnT = this.tr.warnTime ?? rndRange(1.6, 3.2);
+    this.huntT += this.warnT;
     this.lastKnown = null;
+    this.searchTarget = null;
+    this.loseLosT = 0;
     this.losTime = 0;
     this.path = null;
     this.flickerSeed = Math.random() * 100;
@@ -391,10 +461,41 @@ export class Ghost {
     return true;
   }
 
+  // фаза 2 — «поиск»: с чего начать? Призрак помнит прошлые охоты:
+  // укрытие, где жертва пряталась, и комнату, где она проводит время.
+  pickSearchTarget(game) {
+    const r = Math.random();
+    const mem = this.memory;
+    if (mem.hideSpot && mem.hideSpot.floor === this.floor && r < 0.4) {
+      return { tx: Math.floor(mem.hideSpot.x / TILE), ty: Math.floor(mem.hideSpot.y / TILE) };
+    }
+    if (game.director && r < 0.7) {
+      const rid = game.director.mostVisitedRoom(this.world, this.floor);
+      const room = this.world.roomById(rid);
+      if (room) {
+        const rect = room.rects[0];
+        return { tx: rect.x + (rect.w >> 1), ty: rect.y + (rect.h >> 1) };
+      }
+    }
+    return null; // просто блуждает
+  }
+
   updateHunt(dt, game) {
     const pl = game.player;
     this.huntT -= dt;
-    this.graceT -= dt;
+
+    // фаза «предупреждение»: мир кричит об опасности, но призрак неподвижен
+    if (this.huntPhase === 'warn') {
+      this.warnT -= dt;
+      this.targetAlpha = 0;
+      if (this.warnT <= 0) {
+        this.huntPhase = 'search';
+        audio.huntStart();
+        const t = this.pickSearchTarget(game);
+        if (t) { this.searchTarget = t; this.setPathTo(t.tx, t.ty); }
+      }
+      return;
+    }
 
     // мерцающая видимость
     const rate = this.tr.dimHunt ? 0.35 : 1;
@@ -449,6 +550,18 @@ export class Ghost {
       } else this.losTime = Math.max(0, this.losTime - dt * 2);
     }
 
+    // переходы поиск ↔ погоня
+    if (sees) {
+      if (this.huntPhase !== 'chase') {
+        this.huntPhase = 'chase';
+        this.loseLosT = 0;
+        audio.huntChase(); // жертва замечена — звук резко меняется
+      }
+    } else if (this.huntPhase === 'chase') {
+      this.loseLosT += dt;
+      if (this.loseLosT > 1.8) this.huntPhase = 'search';
+    }
+
     if (sees) {
       this.lastKnown = { x: pl.x, y: pl.y };
       // прямое преследование
@@ -461,30 +574,71 @@ export class Ghost {
       this.ensurePath(this.lastKnown.x, this.lastKnown.y, dt);
       this.followPath(dt, speed * 0.85);
       if (Math.hypot(this.lastKnown.x - this.x, this.lastKnown.y - this.y) < TILE * 0.7) this.lastKnown = null;
+    } else if (this.searchTarget) {
+      // проверка знакомого места (память о прошлых охотах)
+      this.followPath(dt, speed * 0.8);
+      if (!this.path || this.pathI >= this.path.length) this.searchTarget = null;
     } else {
       // случайное блуждание
       if (!this.path || this.pathI >= this.path.length) this.pickWanderTarget(true);
       this.followPath(dt, speed * 0.7);
     }
 
-    // убийство
-    if (sameFloor && pl.alive && !pl.hidden && this.graceT <= 0 &&
+    // убийство (в фазе предупреждения мы сюда не доходим)
+    if (sameFloor && pl.alive && !pl.hidden &&
       Math.hypot(pl.x - this.x, pl.y - this.y) < HUNT_KILL_DIST) {
       game.killPlayer();
     }
     // обнаружение в укрытии в упор (если видел, как игрок прятался)
-    if (sameFloor && pl.hidden && pl.hiddenSeen && this.graceT <= 0 &&
+    if (sameFloor && pl.hidden && pl.hiddenSeen &&
       Math.hypot(pl.hidden.x - this.x, pl.hidden.y - this.y) < TILE * 0.9) {
       pl.hidden = null;
     }
   }
 
   endHunt(game) {
+    // память: где жертва пряталась — в следующий раз проверит первым делом
+    const pl = game.player;
+    if (pl.hidden && pl.alive) {
+      this.memory.hideSpot = { x: pl.hidden.x, y: pl.hidden.y, floor: pl.hidden.floor };
+    }
     this.state = 'idle';
     this.stateT = rndRange(4, 8);
     this.targetAlpha = 0;
+    this.huntPhase = null;
+    this.searchTarget = null;
     this.huntCooldown = this.tr.huntCooldown ?? rndRange(22, 32);
     game.onHuntEnd();
+    this.maybeMigrate(game);
+    // «послесловие»: призрак уходит к себе, дом замолкает
+    if (this.room.floor === this.floor) {
+      this.state = 'roam';
+      const r = this.room.rects[0];
+      this.setPathTo(r.x + (r.w >> 1), r.y + (r.h >> 1));
+      this.pendingStairs = null;
+    }
+  }
+
+  // миграция любимой комнаты: не чаще раза за контракт, только после охоты.
+  // Старая комната медленно прогревается, новая — остывает (через worldSim).
+  maybeMigrate(game) {
+    if (this.migrated) return;
+    const chance = game.difficulty === 'pro' ? 0.4 : 0.15;
+    if (Math.random() > chance) return;
+    const rooms = this.world.rooms.filter(r => r.key !== 'hall' && r.id !== this.roomId);
+    if (!rooms.length) return;
+    const room = rndPick(rooms);
+    this.roomId = room.id;
+    this.migrated = true;
+    this.activity = Math.min(10, this.activity + 3);
+    // орбы переезжают вместе с призраком
+    const rect = room.rects[0];
+    for (const o of this.world.orbs || []) {
+      o.floor = room.floor;
+      o.home = rect;
+      o.x = (rect.x + 0.8 + Math.random() * (rect.w - 1.6)) * TILE;
+      o.y = (rect.y + 0.8 + Math.random() * (rect.h - 1.6)) * TILE;
+    }
   }
 
   smudge(game) {

@@ -550,6 +550,15 @@ export const audio = {
     tone({ type: 'sine', freq: 90, slide: 30, dur: 2.2, gain: 0.1 });
   },
 
+  huntChase() {
+    if (!this.ready) return;
+    if (playSample('hunt.chase', { gain: 0.75 })) return;
+    // жертва замечена: рык + резкий шумовой подъём
+    tone({ type: 'sawtooth', freq: 92, slide: 55, dur: 0.9, gain: 0.13, vib: 24, vibRate: 9, attack: 0.005 });
+    noise({ dur: 0.7, type: 'bandpass', freq: 480, q: 1.4, gain: 0.15, freqEnd: 950, attack: 0.01 });
+    tone({ type: 'sine', freq: 46, dur: 0.8, gain: 0.2, attack: 0.004 });
+  },
+
   jumpscare() {
     if (!this.ready) return;
     if (playSample('player.jumpscare', { gain: 0.9 })) return;

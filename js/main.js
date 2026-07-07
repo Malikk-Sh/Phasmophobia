@@ -15,6 +15,7 @@ import { Ghost } from './entities/ghost.js';
 import { GHOSTS } from './systems/ghostData.js';
 import { equipment, ITEMS } from './systems/equipment.js';
 import { worldSim } from './systems/evidence.js';
+import { Director } from './systems/director.js';
 import { hud } from './ui/hud.js';
 import { journal } from './ui/journal.js';
 import { van } from './ui/van.js';
@@ -115,6 +116,7 @@ const game = {
       ]),
     };
 
+    this.director = new Director();
     equipment.resetContract(this);
     worldSim.initContract(this);
   },
@@ -156,7 +158,10 @@ const game = {
   },
 
   onHuntStart() {
-    audio.huntStart();
+    // фаза предупреждения: тот же «сбой электроники», что и у ложной охоты —
+    // игрок не может отличить обманку от настоящей, пока не станет поздно.
+    // Полноценный рёв прозвучит, когда призрак двинется (фаза поиска).
+    audio.falseHuntCue();
     this.huntTime = 0;
     try { navigator.vibrate?.([70, 50, 120]); } catch { /* нет поддержки */ }
     this.camera.shake(2.5, 1.2);
@@ -168,6 +173,7 @@ const game = {
 
   onHuntEnd() {
     audio.huntEnd();
+    this.director.afterHunt(); // «послесловие»: дом надолго замолкает
     const front = this.world.doors.find(d => d.id === this.world.frontDoorId);
     if (front) front.locked = false;
   },
@@ -396,6 +402,7 @@ const game = {
     // симуляция
     pl.update(dt, this);
     this.aggression = clamp((100 - pl.sanity) / 100, 0, 1);
+    this.director.update(dt, this);
     this.ghost.update(dt, this);
     worldSim.update(dt, this);
     equipment.update(dt, this);
