@@ -21,7 +21,15 @@ import { journal } from './ui/journal.js';
 import { van } from './ui/van.js';
 import { menus } from './ui/menus.js';
 
+// комнатные микрособытия: у каждой комнаты — свой «голос»
+const ROOM_FX = {
+  bath: ['drip'], kitchen: ['dish', 'fridge'], dining: ['dish'], living: ['tv'],
+  master: ['bed'], kids: ['toy'], garage: ['metal'], utility: ['metal', 'drip'],
+  cellar: ['drip', 'pipe'], workshop: ['metal', 'pipe'], boiler: ['pipe', 'drip'],
+};
+
 const OBJECTIVE_POOL = [
+  { key: 'photoGhost', name: 'Сфотографировать призрака' },
   { key: 'event', name: 'Стать свидетелем паранормального события' },
   { key: 'emfAny', name: 'Зафиксировать всплеск ЭМП детектором' },
   { key: 'freezeRead', name: 'Замерить температуру ниже 5°C' },
@@ -178,16 +186,25 @@ const game = {
     if (front) front.locked = false;
   },
 
+  // Кинематографичная смерть: мир глохнет и темнеет → шёпот →
+  // лицо сущности в кадре со скримером → тьма и два последних удара сердца.
   killPlayer() {
     if (!this.player.alive) return;
-    this.player.alive = false;
-    this.fx.flash = 1;
-    audio.jumpscare();
-    audio.death();
-    this.camera.shake(8, 1.6);
+    const pl = this.player, gh = this.ghost;
+    pl.alive = false;
     this.state = 'death-anim';
-    this.deathT = 2.4;
-    this.ghost.endHunt(this);
+    this.deathT = 3.4;
+    this.deathFired = {};
+    this.deathFace = 0;
+    // призрак замирает вплотную перед жертвой
+    gh.state = 'idle'; gh.stateT = 99; gh.huntPhase = null;
+    gh.floor = pl.floor;
+    gh.x = pl.x + Math.cos(pl.angle) * 18;
+    gh.y = pl.y + Math.sin(pl.angle) * 18;
+    gh.visibleAlpha = 0; gh.targetAlpha = 0;
+    audio.duck(0.06, 0.15); // мир мгновенно глохнет
+    const front = this.world.doors.find(d => d.id === this.world.frontDoorId);
+    if (front) front.locked = false;
     this.progress.deaths++;
     saveProgress(this.progress);
   },
@@ -198,6 +215,7 @@ const game = {
     const correct = !died && this.journalPick === this.ghost.data.key;
     const mult = this.difficulty === 'pro' ? 2 : 1;
     const objDone = this.objectives.filter(o => o.done).length;
+    const photos = (this.photos || []).filter(p => p.reward > 0);
     const res = {
       correct, died,
       actual: this.ghost.data.key,
@@ -207,8 +225,10 @@ const game = {
       objDone,
       objReward: objDone * 15 * mult,
       aliveBonus: died ? 0 : 20,
+      photoCount: photos.length,
+      photoReward: photos.reduce((s, p) => s + p.reward, 0),
     };
-    res.total = res.base + res.bonus + res.objReward + res.aliveBonus;
+    res.total = res.base + res.bonus + res.objReward + res.aliveBonus + res.photoReward;
     this.progress.money += res.total;
     this.progress.contracts++;
     if (correct) { this.progress.correct++; audio.win(); }
@@ -260,6 +280,13 @@ const game = {
     if (br.floor === pl.floor) {
       const d2 = (br.x - pl.x) ** 2 + (br.y - pl.y) ** 2;
       if (d2 < R * R) consider(d2, { kind: 'breaker', label: br.on ? 'ЩИТОК ВЫКЛ' : 'ЩИТОК ВКЛ' });
+    }
+    // проклятый предмет
+    const cu = this.world.cursed;
+    if (cu && !cu.used && cu.floor === pl.floor) {
+      const d2 = (cu.x - pl.x) ** 2 + (cu.y - pl.y) ** 2;
+      const names = { musicbox: 'ШКАТУЛКА', mirror: 'ЗЕРКАЛО', doll: 'КУКЛА' };
+      if (d2 < R * R) consider(d2, { kind: 'cursed', label: names[cu.type] });
     }
     // укрытия
     for (const h of this.world.hidingSpots) {
@@ -330,6 +357,7 @@ const game = {
         audio.doorClose();
         break;
       }
+      case 'cursed': this.useCursed(); break;
       case 'pickup': {
         const p = this.world.placed[act.index];
         const free = pl.inventory.indexOf(null);
@@ -343,6 +371,37 @@ const game = {
     }
   },
 
+  // Проклятые предметы: добровольный риск в обмен на информацию или хаос
+  useCursed() {
+    const cu = this.world.cursed;
+    const pl = this.player;
+    const gh = this.ghost;
+    if (!cu || cu.used) return;
+    if (cu.type === 'musicbox') {
+      // мелодия манит призрака; если он дослушает рядом — быть беде
+      cu.used = true;
+      cu.activeT = 8;
+      audio.musicBox();
+      pl.drainSanity(15);
+      this.log('Шкатулка заиграла сама собой…', 'danger');
+      gh.cursedLure = { x: cu.x, y: cu.y, floor: cu.floor, t: 8 };
+    } else if (cu.type === 'mirror') {
+      cu.used = true;
+      pl.drainSanity(20);
+      this.fx.flash = Math.max(this.fx.flash, 0.15);
+      audio.whisper();
+      this.log(`В треснувшем зеркале мелькнуло: ${gh.room.name}`, 'danger');
+      if (Math.random() < 0.25 && this.canHunt()) gh.tryStartHunt(this, true);
+    } else { // кукла
+      cu.used = true;
+      pl.drainSanity(10);
+      audio.knockRaps(0);
+      gh.teleportNearPlayer(this);
+      gh.activity = Math.min(10, gh.activity + 5);
+      this.log('Кукла повернула голову. Оно рядом.', 'danger');
+    }
+  },
+
   // ---------- Обновление ----------
   update(dt) {
     this.time += dt;
@@ -352,6 +411,17 @@ const game = {
 
     if (this.state === 'death-anim') {
       this.deathT -= dt;
+      const t = 3.4 - this.deathT;
+      const fire = (k, fn) => { if (t >= k && !this.deathFired[k]) { this.deathFired[k] = 1; fn(); } };
+      fire(0.65, () => { audio.whisper(); this.ghost.visibleAlpha = 0.9; });
+      fire(1.15, () => {
+        audio.unduck(0.04);
+        audio.jumpscare();
+        this.camera.shake(7, 1.0);
+        this.deathFace = 1;
+        try { navigator.vibrate?.([180, 70, 240]); } catch { /* нет поддержки */ }
+      });
+      fire(2.55, () => { audio.duck(0.12, 0.5); audio.death(); this.deathFace = 0; });
       this.camera.update(dt);
       this.fx.update(dt, this);
       if (this.deathT <= 0) {
@@ -470,6 +540,22 @@ const game = {
       }
     }
 
+    // комнатные микрособытия: у каждой комнаты свой «голос»
+    this.tvStaticT = Math.max(0, (this.tvStaticT || 0) - dt);
+    if (this.world.cursed && this.world.cursed.activeT > 0) this.world.cursed.activeT -= dt;
+    this.roomFxT = (this.roomFxT ?? rndRange(10, 18)) - dt;
+    if (this.roomFxT <= 0) {
+      this.roomFxT = rndRange(14, 30);
+      const room = this.world.roomById(this.world.roomAt(pl.floor, pl.x, pl.y));
+      const kinds = room && ROOM_FX[room.key];
+      if (kinds && pl.alive) {
+        const kind = rndPick(kinds);
+        if (kind === 'tv') { this.tvStaticT = 1.15; audio.roomTone('tv', 0); }
+        else audio.roomTone(kind, rndRange(-0.5, 0.5));
+        if (Math.random() < 0.3) pl.drainSanity(0.5);
+      }
+    }
+
     // гроза: случайные молнии с громом
     this.lightningT -= dt;
     if (this.lightningT <= 0) {
@@ -490,6 +576,9 @@ const game = {
     audio.update(dt, {
       heartbeat,
       huntNear,
+      // темп шагов призрака: в погоне — частые, у Ревенанта вне погони — редкие тяжёлые
+      ghostStepInt: gh.huntPhase === 'chase' ? 0.34
+        : (gh.tr.slowSpeed !== undefined ? 1.05 : 0.58),
       emfLevel: pl.currentItem() === 'emf' ? equipment.emfLevel : 0,
       spiritOn: pl.currentItem() === 'spirit' && !pl.hidden,
       lowSanity: pl.sanity < 40 && this.world.isIndoors(pl.floor, pl.x, pl.y),

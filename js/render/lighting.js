@@ -148,6 +148,16 @@ export class Lighting {
       if (it.type === 'dots') this.punch(it.x, it.y, TILE * 2.6, 0.28 * fl);
     }
 
+    // проклятый предмет тлеет в темноте
+    if (world.cursed && !world.cursed.used && world.cursed.floor === player.floor) {
+      this.punch(world.cursed.x, world.cursed.y, TILE * 1.3,
+        0.28 + Math.sin(game.time * 2.2) * 0.08);
+    }
+    // ожившие помехи телевизора
+    if (game.tvStaticT > 0 && player.floor === 0) {
+      this.punch(25.6 * TILE, 18.35 * TILE, TILE * 2.4, 0.35 + Math.random() * 0.25);
+    }
+
     // призрак чуть виден в темноте при манифестации
     const gh = game.ghost;
     if (gh && gh.floor === player.floor && gh.visibleAlpha > 0.02) {

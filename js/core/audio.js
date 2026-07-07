@@ -274,11 +274,11 @@ export const audio = {
         this.whisper();
       }
     }
-    // шаги призрака при охоте
+    // шаги призрака при охоте (темп зависит от фазы: погоня — чаще)
     if (s.huntNear > 0.02) {
       T.ghostStep -= dt;
       if (T.ghostStep <= 0) {
-        T.ghostStep = 0.55;
+        T.ghostStep = s.ghostStepInt || 0.55;
         if (!playSample('ghost.step', { gain: 0.45 * s.huntNear, rate: sampleGain(1, 0.08) })) {
           noise({ dur: 0.16, type: 'lowpass', freq: 130, gain: 0.16 * s.huntNear, rate: 0.5 });
           tone({ type: 'sine', freq: 40, dur: 0.15, gain: 0.22 * s.huntNear, slide: 28 });
@@ -390,6 +390,73 @@ export const audio = {
         rate: 0.7, pan: pan + i * 0.12,
       }), i * 420);
     }
+  },
+
+  shutter() {
+    if (!this.ready) return;
+    if (playSample('item.shutter', { gain: 0.5 })) return;
+    noise({ dur: 0.03, type: 'highpass', freq: 2600, gain: 0.14, attack: 0.001 });
+    setTimeout(() => started && noise({ dur: 0.05, type: 'bandpass', freq: 1200, q: 2, gain: 0.08, attack: 0.002 }), 60);
+    setTimeout(() => started && noise({ dur: 0.25, type: 'highpass', freq: 3200, gain: 0.03, attack: 0.02 }), 140); // перемотка
+  },
+
+  musicBox() {
+    if (!this.ready) return;
+    if (playSample('cursed.musicbox', { gain: 0.6 })) return;
+    // расстроенная колыбельная: чистые колокольчиковые ноты, последняя фальшивит
+    const seq = [660, 587, 660, 784, 660, 587, 523, 494, 523, 660, 622];
+    seq.forEach((f, i) => setTimeout(() => {
+      if (!started) return;
+      const detune = i >= seq.length - 2 ? 0.97 : 1;
+      tone({ type: 'sine', freq: f * detune, dur: 0.9, gain: 0.055, attack: 0.002 });
+      tone({ type: 'sine', freq: f * detune * 3, dur: 0.5, gain: 0.012, attack: 0.002 });
+    }, i * 640));
+  },
+
+  // комнатные микрозвуки
+  roomTone(kind, pan = 0) {
+    if (!this.ready) return;
+    if (playSample(`room.${kind}`, { gain: 0.45, pan })) return;
+    switch (kind) {
+      case 'drip': // капля
+        tone({ type: 'sine', freq: 1200, slide: 500, dur: 0.06, gain: 0.07, pan, attack: 0.002 });
+        setTimeout(() => started && tone({ type: 'sine', freq: 800, slide: 300, dur: 0.09, gain: 0.04, pan }), 90);
+        break;
+      case 'pipe': // стон трубы
+        tone({ type: 'sawtooth', freq: 90, slide: 140, dur: 1.8, gain: 0.03, vib: 12, vibRate: 2.2, pan, attack: 0.4 });
+        break;
+      case 'bed': // скрип кровати
+        tone({ type: 'sawtooth', freq: 180, slide: 120, dur: 0.5, gain: 0.02, vib: 30, vibRate: 6, pan, attack: 0.05 });
+        break;
+      case 'dish': // звякнула посуда
+        tone({ type: 'triangle', freq: 2200, slide: 1900, dur: 0.12, gain: 0.05, pan, attack: 0.002 });
+        setTimeout(() => started && tone({ type: 'triangle', freq: 2600, slide: 2300, dur: 0.1, gain: 0.03, pan }), 110);
+        break;
+      case 'toy': // писк игрушки
+        tone({ type: 'square', freq: 900, slide: 1300, dur: 0.18, gain: 0.025, pan, attack: 0.01 });
+        break;
+      case 'metal': // звон металла
+        noise({ dur: 0.4, type: 'bandpass', freq: 3400, q: 14, gain: 0.06, pan, attack: 0.002 });
+        break;
+      case 'tv': // телевизор ожил помехами
+        noise({ dur: 1.1, type: 'highpass', freq: 1800, gain: 0.06, pan, attack: 0.02 });
+        tone({ type: 'sine', freq: 940, dur: 1.0, gain: 0.008, pan }); // писк кинескопа
+        break;
+      case 'fridge': // холодильник дрогнул
+        tone({ type: 'sawtooth', freq: 52, dur: 1.4, gain: 0.03, vib: 4, vibRate: 12, pan, attack: 0.2 });
+        break;
+    }
+  },
+
+  // приглушить всё (кинематографичная смерть)
+  duck(level = 0.12, sec = 0.3) {
+    if (!this.ready) return;
+    master.gain.cancelScheduledValues(now());
+    master.gain.setTargetAtTime(level, now(), sec);
+  },
+  unduck(sec = 0.2) {
+    if (!this.ready) return;
+    master.gain.setTargetAtTime(0.9, now(), sec);
   },
 
   falseHuntCue() {

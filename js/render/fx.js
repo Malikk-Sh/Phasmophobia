@@ -179,6 +179,66 @@ export class FX {
       ctx.fillStyle = `rgba(200,210,220,${this.flash})`;
       ctx.fillRect(0, 0, w, h);
     }
+
+    // кинематографичная смерть: затемнение → лицо сущности → тьма
+    if (game.state === 'death-anim') {
+      const t = 3.4 - game.deathT;
+      ctx.fillStyle = `rgba(0,0,0,${clamp(t * 1.5, 0, t > 2.55 ? 1 : 0.88)})`;
+      ctx.fillRect(0, 0, w, h);
+      if (game.deathFace > 0 && t < 2.55) this.drawDeathFace(ctx, w, h, clamp((t - 1.15) / 1.3, 0, 1));
+    } else if (game.state === 'dead') {
+      ctx.fillStyle = '#000';
+      ctx.fillRect(0, 0, w, h);
+    }
+  }
+
+  drawDeathFace(ctx, w, h, k) {
+    const scale = 0.72 + k * 1.0;
+    const a = Math.min(1, k * 8);
+    const jx = (Math.random() - 0.5) * 10, jy = (Math.random() - 0.5) * 10;
+    ctx.save();
+    ctx.translate(w / 2 + jx, h / 2 + jy);
+    ctx.scale(scale, scale);
+    ctx.globalAlpha = a;
+    const R = h * 0.34;
+    // мертвенно-бледное лицо
+    const fg = ctx.createRadialGradient(0, -R * 0.1, R * 0.18, 0, 0, R);
+    fg.addColorStop(0, 'rgba(208,212,216,.96)');
+    fg.addColorStop(0.7, 'rgba(150,158,165,.85)');
+    fg.addColorStop(1, 'rgba(60,66,72,0)');
+    ctx.fillStyle = fg;
+    ctx.beginPath(); ctx.ellipse(0, 0, R * 0.62, R * 0.88, 0, 0, 7); ctx.fill();
+    // провалы глазниц
+    for (const sx of [-1, 1]) {
+      const eg = ctx.createRadialGradient(sx * R * 0.25, -R * 0.2, 1, sx * R * 0.25, -R * 0.2, R * 0.24);
+      eg.addColorStop(0, 'rgba(2,2,4,1)');
+      eg.addColorStop(0.7, 'rgba(4,4,8,.95)');
+      eg.addColorStop(1, 'rgba(10,10,14,0)');
+      ctx.fillStyle = eg;
+      ctx.beginPath();
+      ctx.ellipse(sx * R * 0.25, -R * 0.2, R * 0.16, R * 0.21, sx * 0.2, 0, 7);
+      ctx.fill();
+    }
+    // разинутый рот
+    const mg = ctx.createRadialGradient(0, R * 0.38, 2, 0, R * 0.38, R * 0.32);
+    mg.addColorStop(0, 'rgba(1,1,2,1)');
+    mg.addColorStop(0.75, 'rgba(3,3,6,.95)');
+    mg.addColorStop(1, 'rgba(8,8,12,0)');
+    ctx.fillStyle = mg;
+    ctx.beginPath();
+    ctx.ellipse(0, R * 0.38, R * 0.17, R * 0.36 * (0.6 + k * 0.5), 0, 0, 7);
+    ctx.fill();
+    // тёмные потёки от глаз
+    ctx.strokeStyle = 'rgba(20,22,28,.55)';
+    ctx.lineWidth = R * 0.02;
+    for (const sx of [-1, 1]) {
+      ctx.beginPath();
+      ctx.moveTo(sx * R * 0.25, -R * 0.02);
+      ctx.quadraticCurveTo(sx * R * 0.28, R * 0.3, sx * R * 0.22, R * 0.55);
+      ctx.stroke();
+    }
+    ctx.restore();
+    ctx.globalAlpha = 1;
   }
 
   clear() { this.particles.length = 0; this.flash = 0; this.lightning = 0; }

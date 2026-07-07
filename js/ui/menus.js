@@ -129,6 +129,7 @@ export const menus = {
           <div>Базовая ставка <span class="rw">$${res.base}</span></div>
           <div>Верное опознание <span class="rw">$${res.bonus}</span></div>
           <div>Задачи (${res.objDone}/3) <span class="rw">$${res.objReward}</span></div>
+          <div>Фотографии (${res.photoCount}) <span class="rw">$${res.photoReward}</span></div>
           <div>Выжил <span class="rw">$${res.aliveBonus}</span></div>
           <div style="border-top:1px solid #2a3a44; margin-top:6px; padding-top:6px">
             ИТОГО <span class="rw">$${res.total}</span></div>

@@ -1,7 +1,7 @@
 // Динамика мира и улики: температура, орбы, физика пропсов,
 // анимация дверей, ЭМП-очистка, соль под призраком.
 
-import { TILE, clamp, damp, rndRange } from '../core/utils.js';
+import { TILE, clamp, damp, rndRange, rndPick } from '../core/utils.js';
 import { audio } from '../core/audio.js';
 
 export const worldSim = {
@@ -22,6 +22,23 @@ export const worldSim = {
         });
       }
     }
+
+    // проклятый предмет: один случайный на контракт, в случайной комнате
+    const type = rndPick(['musicbox', 'mirror', 'doll']);
+    const rooms = world.rooms.filter(r => r.key !== 'hall');
+    let placed = null;
+    for (let attempt = 0; attempt < 24 && !placed; attempt++) {
+      const room = rndPick(rooms);
+      const rect = room.rects[0];
+      const x = (rect.x + 0.7 + Math.random() * (rect.w - 1.4)) * TILE;
+      const y = (rect.y + 0.7 + Math.random() * (rect.h - 1.4)) * TILE;
+      if (world.isBlocked(room.floor, Math.floor(x / TILE), Math.floor(y / TILE))) continue;
+      const hit = (world.colliders[room.floor] || []).some(c =>
+        x > c.x - 8 && x < c.x + c.w + 8 && y > c.y - 8 && y < c.y + c.h + 8);
+      if (hit) continue;
+      placed = { type, x, y, floor: room.floor, used: false, activeT: 0, photoDone: false };
+    }
+    world.cursed = placed;
   },
 
   update(dt, game) {

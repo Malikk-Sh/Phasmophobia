@@ -1,13 +1,13 @@
 // Типы призраков: уникальные тройки улик + поведенческие черты.
 
 export const EVIDENCE = [
-  { key: 'emf', name: 'ЭМП 5 уровня', icon: '📡' },
-  { key: 'spirit', name: 'Спиритбокс', icon: '📻' },
-  { key: 'uv', name: 'УФ-отпечатки', icon: '🖐' },
-  { key: 'orbs', name: 'Призрачные огни', icon: '✨' },
-  { key: 'writing', name: 'Запись в книге', icon: '📖' },
-  { key: 'freezing', name: 'Минусовая температура', icon: '❄' },
-  { key: 'dots', name: 'DOTS-проектор', icon: '🟢' },
+  { key: 'emf', name: 'ЭМП 5 уровня', icon: 'emf' },
+  { key: 'spirit', name: 'Спиритбокс', icon: 'spirit' },
+  { key: 'uv', name: 'УФ-отпечатки', icon: 'hand' },
+  { key: 'orbs', name: 'Призрачные огни', icon: 'orb' },
+  { key: 'writing', name: 'Запись в книге', icon: 'book' },
+  { key: 'freezing', name: 'Минусовая температура', icon: 'snow' },
+  { key: 'dots', name: 'DOTS-проектор', icon: 'dots' },
 ];
 
 // Скорости в px/s (игрок: 92)

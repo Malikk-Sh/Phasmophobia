@@ -512,6 +512,22 @@ export class Renderer {
       drawPlaced(ctx, it, t, game);
     }
 
+    // проклятый предмет
+    if (world.cursed && world.cursed.floor === floor) this.drawCursed(ctx, world.cursed, t);
+
+    // телевизор ожил помехами (микрособытие гостиной)
+    if (floor === 0 && game.tvStaticT > 0) {
+      const tx = 25.6 * TILE, ty = 18.35 * TILE;
+      const fl = 0.5 + Math.random() * 0.5;
+      ctx.fillStyle = `rgba(160,190,220,${0.5 * fl})`;
+      ctx.fillRect(tx - 34, ty - 5, 68, 9);
+      const g = ctx.createRadialGradient(tx, ty, 4, tx, ty, TILE * 2.2);
+      g.addColorStop(0, `rgba(140,180,220,${0.22 * fl})`);
+      g.addColorStop(1, 'rgba(140,180,220,0)');
+      ctx.fillStyle = g;
+      ctx.beginPath(); ctx.arc(tx, ty, TILE * 2.2, 0, 7); ctx.fill();
+    }
+
     // предметы-пропсы
     for (const p of world.props) {
       if (p.floor !== floor) continue;
@@ -562,6 +578,67 @@ export class Renderer {
         ctx.closePath(); ctx.fill();
       }
     }
+  }
+
+  drawCursed(ctx, cu, t) {
+    ctx.save();
+    ctx.translate(cu.x, cu.y);
+    // зловещее красное свечение, пока предмет не использован
+    if (!cu.used) {
+      const p = 0.5 + Math.sin(t * 2.2) * 0.25;
+      const g = ctx.createRadialGradient(0, 0, 2, 0, 0, 22);
+      g.addColorStop(0, `rgba(160,30,30,${0.25 * p})`);
+      g.addColorStop(1, 'rgba(160,30,30,0)');
+      ctx.fillStyle = g;
+      ctx.beginPath(); ctx.arc(0, 0, 22, 0, 7); ctx.fill();
+    }
+    ctx.fillStyle = 'rgba(0,0,0,.35)';
+    ctx.beginPath(); ctx.ellipse(1, 2, 8, 5, 0, 0, 7); ctx.fill();
+    if (cu.type === 'musicbox') {
+      ctx.fillStyle = '#4a3320';
+      ctx.fillRect(-7, -5, 14, 10);
+      ctx.fillStyle = '#5f452b';
+      ctx.fillRect(-6, -4, 12, 8);
+      ctx.fillStyle = '#c8b060';
+      ctx.fillRect(6.5, -1.2, 3, 2.4); // ручка
+      if (cu.activeT > 0) { // открытая крышка + балерина
+        ctx.fillStyle = '#3a2818';
+        ctx.fillRect(-7, -9, 14, 4);
+        ctx.fillStyle = '#d8ccb8';
+        ctx.beginPath(); ctx.arc(0, -3, 1.6, 0, 7); ctx.fill();
+      }
+    } else if (cu.type === 'mirror') {
+      ctx.strokeStyle = '#6a5a34';
+      ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.ellipse(0, -3, 6, 8.5, 0, 0, 7); ctx.stroke();
+      ctx.fillStyle = cu.used ? '#20262c' : '#39434e';
+      ctx.beginPath(); ctx.ellipse(0, -3, 5, 7.5, 0, 0, 7); ctx.fill();
+      if (cu.used) { // трещины
+        ctx.strokeStyle = 'rgba(200,210,220,.5)';
+        ctx.lineWidth = 0.7;
+        ctx.beginPath();
+        ctx.moveTo(-3, -7); ctx.lineTo(1, -2); ctx.lineTo(-2, 2);
+        ctx.moveTo(3, -6); ctx.lineTo(0, -2); ctx.lineTo(3, 1);
+        ctx.stroke();
+      } else {
+        ctx.fillStyle = 'rgba(220,230,240,.25)';
+        ctx.beginPath(); ctx.ellipse(-1.5, -5.5, 1.4, 3, 0.5, 0, 7); ctx.fill();
+      }
+      ctx.strokeStyle = '#4a3d24';
+      ctx.beginPath(); ctx.moveTo(0, 5.5); ctx.lineTo(0, 8); ctx.moveTo(-3.5, 8.5); ctx.lineTo(3.5, 8.5); ctx.stroke();
+    } else { // кукла
+      ctx.fillStyle = '#d3c3ac';
+      ctx.beginPath(); ctx.arc(0, -4.5, 3.1, 0, 7); ctx.fill(); // голова
+      ctx.fillStyle = '#6a3a3a';
+      ctx.beginPath(); ctx.moveTo(-3, -2); ctx.lineTo(3, -2); ctx.lineTo(4.4, 5); ctx.lineTo(-4.4, 5); ctx.closePath(); ctx.fill();
+      ctx.fillStyle = '#d3c3ac';
+      ctx.fillRect(-5, -1.5, 1.8, 4.5); ctx.fillRect(3.2, -1.5, 1.8, 4.5);
+      ctx.fillStyle = '#1a1216';
+      ctx.fillRect(-1.6, -5.4, 1, 1); ctx.fillRect(0.7, -5.4, 1, 1); // глаза-бусины
+      ctx.fillStyle = '#3a2c1c';
+      ctx.beginPath(); ctx.arc(0, -6.8, 2.6, Math.PI, 0); ctx.fill(); // волосы
+    }
+    ctx.restore();
   }
 
   drawDoor(ctx, d) {

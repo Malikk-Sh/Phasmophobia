@@ -318,3 +318,18 @@ html, body {
 @media (orientation: portrait) { #rotate-hint { display: flex; } }
 
 button { cursor: pointer; font-family: inherit; }
+
+/* SVG-пиктограммы */
+.icn {
+  width: 22px; height: 22px;
+  stroke: currentColor; fill: none;
+  stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round;
+  display: block;
+}
+.hud-btn .icn { width: 24px; height: 24px; margin: 0 auto; }
+#btn-interact .icn { width: 28px; height: 28px; }
+.slot .icn { width: 26px; height: 26px; }
+.gear-item .icn { width: 22px; height: 22px; margin: 0 auto 3px; }
+.ev-row .icn { width: 19px; height: 19px; display: inline-block; vertical-align: -4px; margin-right: 6px; }
+#gear-desc .icn { display: inline-block; vertical-align: -5px; margin-right: 4px; }
+#btn-ask .icn { display: inline-block; vertical-align: -5px; margin-right: 6px; width: 18px; height: 18px; }

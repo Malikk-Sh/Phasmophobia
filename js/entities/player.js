@@ -177,7 +177,7 @@ export class Player {
     const ITEM_COLOR = {
       emf: '#c8842e', spirit: '#4a7a9a', thermo: '#b0b8bc', uv: '#6a4a9a',
       camera: '#3a4a3a', book: '#8a7a5a', dots: '#3a8a5a', crucifix: '#b09a5a',
-      smudge: '#7a6a4a', salt: '#d8dade', pills: '#d0d4d8',
+      smudge: '#7a6a4a', salt: '#d8dade', pills: '#d0d4d8', photo: '#8a8578',
     };
     if (item && ITEM_COLOR[item]) {
       ctx.fillStyle = ITEM_COLOR[item];

@@ -3,6 +3,7 @@
 import { ITEMS } from '../systems/equipment.js';
 import { audio } from '../core/audio.js';
 import { TILE } from '../core/utils.js';
+import { icon } from './icons.js';
 
 const $ = (s) => document.querySelector(s);
 
@@ -59,7 +60,7 @@ export const van = {
       const inSlot = g.player.inventory.includes(key);
       const uses = it.consumable ? ` ×${g.itemUses[key] ?? it.consumable}` : '';
       return `<button class="gear-item ${inSlot ? 'inslot' : ''}" data-k="${key}">
-        <span class="gi">${it.icon}</span>${it.name}${uses}</button>`;
+        ${icon(it.icon)}${it.name}${uses}</button>`;
     }).join('');
     grid.querySelectorAll('.gear-item').forEach(b => {
       b.addEventListener('click', () => {
@@ -76,7 +77,7 @@ export const van = {
         audio.uiClick();
         this.renderGear();
         const d = $('#gear-desc');
-        if (d) d.innerHTML = `<b>${it.icon} ${it.name}.</b> ${it.desc}`;
+        if (d) d.innerHTML = `<b>${icon(it.icon)}${it.name}.</b> ${it.desc}`;
       });
     });
   },

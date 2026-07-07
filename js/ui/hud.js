@@ -3,6 +3,7 @@
 import { input } from '../core/input.js';
 import { ITEMS, equipment } from '../systems/equipment.js';
 import { fmtTime } from '../core/utils.js';
+import { icon } from './icons.js';
 
 const $ = (s) => document.querySelector(s);
 
@@ -18,12 +19,12 @@ export const hud = {
         <div class="slot" data-i="2"></div>
       </div>
       <div id="setup-timer"></div>
-      <button id="btn-journal" class="hud-btn"><span class="ico">📓</span></button>
-      <button id="btn-interact" class="hud-btn"><span class="ico">✋</span><span class="lbl">ДЕЙСТВИЕ</span></button>
-      <button id="btn-use" class="hud-btn"><span class="ico">⚙</span><span>ИСП.</span></button>
-      <button id="btn-cycle" class="hud-btn"><span class="ico">🔁</span></button>
-      <button id="btn-flash" class="hud-btn"><span class="ico">🔦</span></button>
-      <button id="btn-ask" class="hidden">🎙 Задать вопрос</button>
+      <button id="btn-journal" class="hud-btn">${icon('journal')}</button>
+      <button id="btn-interact" class="hud-btn">${icon('hand')}<span class="lbl">ДЕЙСТВИЕ</span></button>
+      <button id="btn-use" class="hud-btn">${icon('use')}<span>ИСП.</span></button>
+      <button id="btn-cycle" class="hud-btn">${icon('cycle')}</button>
+      <button id="btn-flash" class="hud-btn">${icon('flashlight')}</button>
+      <button id="btn-ask" class="hidden">${icon('mic')}Задать вопрос</button>
       <div id="item-readout" class="hidden"></div>
     `;
     input.bindButton($('#btn-interact'), 'interact');
@@ -56,7 +57,11 @@ export const hud = {
       const item = pl.inventory[i];
       s.classList.toggle('active', i === pl.activeSlot);
       s.classList.toggle('empty', !item);
-      s.textContent = item ? ITEMS[item].icon : '';
+      const want = item ? ITEMS[item].icon : '';
+      if (s.dataset.icon !== want) {
+        s.dataset.icon = want;
+        s.innerHTML = want ? icon(want) : '';
+      }
     });
 
     // показания

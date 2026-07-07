@@ -74,6 +74,9 @@ export class Ghost {
 
     const pl = game.player;
 
+    // мелодия проклятой шкатулки манит призрака
+    if (this.cursedLure && this.updateCursedLure(dt, game)) return;
+
     switch (this.state) {
       case 'idle':
         this.targetAlpha = 0;
@@ -115,6 +118,28 @@ export class Ghost {
             this.endEvent(game);
             break;
           }
+        } else if (type === 'propStorm') {
+          this.targetAlpha = 0.15;
+          this.stormT -= dt;
+          if (this.stormT <= 0) {
+            this.stormT = 0.35;
+            this.interactProp(game);
+            game.fx.dustBurst(this.x + rndRange(-30, 30), this.y + rndRange(-30, 30), this.floor);
+          }
+        } else if (type === 'doorFury') {
+          this.targetAlpha = 0;
+          this.furyT -= dt;
+          if (this.furyT <= 0) {
+            this.furyT = 0.8;
+            const doors = this.world.doors.filter(d => d.floor === this.floor && !d.isFront);
+            if (doors.length) {
+              const d = rndPick(doors);
+              d.open = !d.open;
+              d.targetSwing = d.open ? 1 : 0;
+              audio.doorCreak(true);
+              this.emitEMF(2, (d.tx + 0.5) * TILE, (d.ty + 0.5) * TILE);
+            }
+          }
         } else {
           // lightsOut / knock / falseHunt — невидимые, чисто сенсорные
           this.targetAlpha = 0;
@@ -142,6 +167,30 @@ export class Ghost {
     if (this.state === 'hunt' && Math.random() < dt * 6) {
       game.fx.ghostTrail(this.x, this.y, this.floor);
     }
+  }
+
+  // идёт на мелодию шкатулки; дослушал рядом с жертвой — охота
+  updateCursedLure(dt, game) {
+    const l = this.cursedLure;
+    l.t -= dt;
+    if (this.state === 'hunt' || this.state === 'event') { this.cursedLure = null; return false; }
+    this.state = 'roam';
+    this.targetAlpha = 0.25; // полупроявлен, пока слушает зов
+    let arrived = false;
+    if (this.floor === l.floor) {
+      arrived = Math.hypot(l.x - this.x, l.y - this.y) < TILE * 0.9;
+      if (!arrived) { this.ensurePath(l.x, l.y, dt); this.followPath(dt, 72); }
+    }
+    if (l.t <= 0 || (arrived && l.t < 5.5)) {
+      this.cursedLure = null;
+      const pl = game.player;
+      const near = pl.floor === this.floor && Math.hypot(pl.x - l.x, pl.y - l.y) < TILE * 3.5;
+      if (near && !game.setupPhase) this.tryStartHunt(game, true);
+      else { this.eventType = null; this.startEvent(game); }
+      return false;
+    }
+    if (Math.random() < dt * 3) game.fx.ghostTrail(this.x, this.y, this.floor);
+    return true;
   }
 
   seenByPlayer(pl) {
@@ -337,14 +386,22 @@ export class Ghost {
 
   startEvent(game) {
     const pl = game.player;
-    // выбор типа события — чтобы дом не превращался в равномерный генератор
-    const roll = Math.random();
+    // выбор типа события; у каждой сущности — свой почерк
     let type;
-    if (roll < 0.30) type = 'manifest';
-    else if (roll < 0.52) type = 'silhouette';
-    else if (roll < 0.67) type = 'lightsOut';
-    else if (roll < 0.83) type = 'knock';
-    else type = 'falseHunt';
+    const sig = Math.random();
+    if (this.tr.lightsOff && sig < 0.45) type = 'lightsOut';           // Мара душит свет
+    else if (this.tr.dimHunt && sig < 0.45) type = 'silhouette';       // Фантом — исчезающий силуэт
+    else if (this.tr.multiThrow && sig < 0.5) type = 'propStorm';      // Полтергейст — вихрь вещей
+    else if (this.tr.doorSlam && sig < 0.4) type = 'doorFury';         // Юрэй хлопает дверями
+    else if (this.tr.wail && sig < 0.4) type = 'manifest';             // Банши выходит показаться
+    else {
+      const roll = Math.random();
+      if (roll < 0.28) type = 'manifest';
+      else if (roll < 0.48) type = 'silhouette';
+      else if (roll < 0.62) type = 'lightsOut';
+      else if (roll < 0.78) type = 'knock';
+      else type = 'falseHunt';
+    }
     // повторы скучны — не делать одно и то же дважды подряд
     if (type === this.lastEventType) type = 'manifest';
     this.lastEventType = type;
@@ -387,6 +444,17 @@ export class Ghost {
       const pan = Math.max(-0.8, Math.min(0.8, (this.x - pl.x) / (TILE * 10)));
       audio.knockRaps(pan);
       this.emitEMF(2);
+    } else if (type === 'propStorm') {
+      // вихрь предметов вокруг призрака (почерк Полтергейста)
+      this.stateT = rndRange(2.2, 3.2);
+      this.stormT = 0;
+      audio.ghostEvent('shadow');
+      pl.drainSanity(rndRange(3, 6));
+    } else if (type === 'doorFury') {
+      // яростные хлопки дверями (почерк Юрэя)
+      this.stateT = 2.4;
+      this.furyT = 0;
+      pl.drainSanity(rndRange(2, 5));
     } else { // falseHunt — обманка: электроника сходит с ума, но охоты нет
       this.stateT = rndRange(2.5, 3.5);
       this.fakeHuntT = this.stateT;
@@ -770,6 +838,19 @@ export class Ghost {
     ctx.translate(this.x, this.y);
     ctx.globalAlpha = alpha;
     const sway = Math.sin(this.sway * 1.7) * 2.4;
+
+    // аура-почерк: у каждой сущности свой холодный оттенок
+    const AURA = {
+      banshee: '138,42,58', demon: '122,26,26', mare: '20,20,40',
+      phantom: '58,74,106', poltergeist: '90,74,26', yurei: '42,74,74',
+      wraith: '74,90,106', onryo: '106,42,26',
+    };
+    const auraCol = AURA[this.data.key] || '58,64,82';
+    const ag = ctx.createRadialGradient(0, -6, 3, 0, -4, 26);
+    ag.addColorStop(0, `rgba(${auraCol},0.34)`);
+    ag.addColorStop(1, `rgba(${auraCol},0)`);
+    ctx.fillStyle = ag;
+    ctx.beginPath(); ctx.arc(0, -4, 26, 0, 7); ctx.fill();
 
     if (this.form === 'shadow') {
       const g = ctx.createRadialGradient(0, -6, 2, 0, -4, 22);

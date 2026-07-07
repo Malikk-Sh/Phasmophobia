@@ -2,6 +2,7 @@
 
 import { EVIDENCE, GHOSTS } from '../systems/ghostData.js';
 import { audio } from '../core/audio.js';
+import { icon } from './icons.js';
 
 const $ = (s) => document.querySelector(s);
 const STATE_LABEL = ['—', 'НАЙДЕНО', 'ИСКЛЮЧЕНО'];
@@ -50,7 +51,7 @@ export const journal = {
       body.innerHTML = EVIDENCE.map(ev => {
         const st = g.journalMarks[ev.key] || 0;
         return `<div class="ev-row ${st === 1 ? 'found' : st === 2 ? 'excluded' : ''}" data-ev="${ev.key}">
-          <span>${ev.icon} ${ev.name}</span>
+          <span>${icon(ev.icon)}${ev.name}</span>
           <button class="ev-state">${STATE_LABEL[st]}</button>
         </div>`;
       }).join('');

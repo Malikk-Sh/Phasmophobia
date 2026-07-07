@@ -1,51 +1,55 @@
 // Снаряжение: описание предметов, использование, показания, отрисовка размещённых.
 
-import { TILE, clamp, rndPick } from '../core/utils.js';
+import { TILE, clamp, rndPick, hasLOS } from '../core/utils.js';
 import { audio } from '../core/audio.js';
 
 export const ITEMS = {
   emf: {
-    name: 'ЭМП-детектор', icon: '📡', held: true,
+    name: 'ЭМП-детектор', icon: 'emf', held: true,
     desc: 'Ловит электромагнитные всплески от активности призрака. Пять делений — улика «ЭМП 5 уровня».',
   },
   spirit: {
-    name: 'Спиритбокс', icon: '📻', held: true,
+    name: 'Спиритбокс', icon: 'spirit', held: true,
     desc: 'Радиосвязь с духами. Задавайте вопросы в тёмной комнате рядом с призраком — некоторые отвечают.',
   },
   thermo: {
-    name: 'Термометр', icon: '🌡', held: true,
+    name: 'Термометр', icon: 'thermo', held: true,
     desc: 'Показывает температуру комнаты. Призрак выстуживает своё логово; ниже 0°C — улика.',
   },
   uv: {
-    name: 'УФ-фонарь', icon: '🔦', held: true,
+    name: 'УФ-фонарь', icon: 'uv', held: true,
     desc: 'Ультрафиолет проявляет отпечатки рук на дверях и выключателях, которые трогал призрак.',
   },
+  photo: {
+    name: 'Фотокамера', icon: 'photo', held: true,
+    desc: 'Плёночная камера, 5 кадров. Снимки паранормального оплачиваются по качеству: дистанция, центр кадра, риск.',
+  },
   camera: {
-    name: 'Видеокамера', icon: '📹', place: true,
+    name: 'Видеокамера', icon: 'camera', place: true,
     desc: 'Ставится на пол. Через ночной монитор в фургоне видны призрачные огни — улика.',
   },
   book: {
-    name: 'Книга призрака', icon: '📖', place: true,
+    name: 'Книга призрака', icon: 'book', place: true,
     desc: 'Положите в комнате призрака: некоторые сущности оставляют в ней жуткие записи.',
   },
   dots: {
-    name: 'DOTS-проектор', icon: '🟢', place: true,
+    name: 'DOTS-проектор', icon: 'dots', place: true,
     desc: 'Проецирует лазерную сетку. Часть призраков проявляется в ней зелёным силуэтом.',
   },
   crucifix: {
-    name: 'Распятие', icon: '✝', place: true,
+    name: 'Распятие', icon: 'crucifix', place: true,
     desc: 'Не даёт призраку начать охоту рядом с собой. Два заряда, затем сгорает.',
   },
   smudge: {
-    name: 'Благовония', icon: '🌿', consumable: 2,
+    name: 'Благовония', icon: 'smudge', consumable: 2,
     desc: 'Подожгите рядом с призраком: отгоняет его и срывает охоту. Держите на случай беды.',
   },
   salt: {
-    name: 'Соль', icon: '🧂', consumable: 3,
+    name: 'Соль', icon: 'salt', consumable: 3,
     desc: 'Насыпьте на пол. Прошедший призрак потревожит кучку и оставит следы.',
   },
   pills: {
-    name: 'Таблетки', icon: '💊', consumable: 1,
+    name: 'Таблетки', icon: 'pills', consumable: 1,
     desc: 'Успокоительное: мгновенно восстанавливает 40% рассудка.',
   },
 };
@@ -61,7 +65,85 @@ export const equipment = {
     this.spiritCooldown = 0;
     this.emfLevel = 0;
     this.fakeEmfT = 0;
-    game.itemUses = { smudge: 2, salt: 3, pills: 1 };
+    game.itemUses = { smudge: 2, salt: 3, pills: 1, photo: 5 };
+    game.photos = [];
+  },
+
+  // ---------- Фотокамера ----------
+  takePhoto(game) {
+    const pl = game.player;
+    const world = game.world;
+    if ((game.itemUses.photo ?? 0) <= 0) { game.log('Плёнка закончилась'); return; }
+    game.itemUses.photo--;
+    audio.shutter();
+    game.fx.flash = Math.max(game.fx.flash, 0.22);
+
+    const MAXD = TILE * 6.5;
+    const occl = world.getOccluders(pl.floor);
+    // кандидат в кадре: дистанция, угол от центра кадра, прямая видимость
+    const inFrame = (x, y, floor) => {
+      if (floor !== pl.floor) return null;
+      const d = Math.hypot(x - pl.x, y - pl.y);
+      if (d > MAXD || d < 4) return null;
+      const da = Math.abs(((Math.atan2(y - pl.y, x - pl.x) - pl.angle + Math.PI * 3) % (Math.PI * 2)) - Math.PI);
+      if (da > 0.6) return null;
+      if (!hasLOS(pl.x, pl.y, x, y, occl)) return null; // сквозь стену не снять
+      return { d, da };
+    };
+    const quality = (f) => Math.max(0.3, (1 - f.d / (MAXD * 1.15))) * (1 - (f.da / 0.6) * 0.45);
+
+    const shots = [];
+    const gh = game.ghost;
+    if (gh && (gh.visibleAlpha > 0.15 || gh.dotsFlash > 0)) {
+      const f = inFrame(gh.x, gh.y, gh.floor);
+      if (f) shots.push({ label: 'Призрак', base: 25, q: quality(f), risk: gh.state === 'hunt' ? 1.6 : 1, key: 'ghost' });
+    }
+    for (const pr of world.prints) {
+      if (pr.photoDone) continue;
+      const f = inFrame(pr.x, pr.y, pr.floor);
+      if (f) shots.push({ label: 'УФ-отпечаток', base: 6, q: quality(f), risk: 1, mark: pr });
+    }
+    for (const s of world.saltPiles) {
+      if (!s.disturbed || s.photoDone) continue;
+      const f = inFrame(s.x, s.y, s.floor);
+      if (f) shots.push({ label: 'Следы в соли', base: 6, q: quality(f), risk: 1, mark: s });
+    }
+    for (const p of world.placed) {
+      if (p.photoDone) continue;
+      if (p.type === 'crucifix' && p.charges <= 0) {
+        const f = inFrame(p.x, p.y, p.floor);
+        if (f) shots.push({ label: 'Сгоревшее распятие', base: 8, q: quality(f), risk: 1, mark: p });
+      }
+      if (p.type === 'book' && p.written) {
+        const f = inFrame(p.x, p.y, p.floor);
+        if (f) shots.push({ label: 'Призрачная запись', base: 6, q: quality(f), risk: 1, mark: p });
+      }
+    }
+    for (const p of world.props) {
+      if (p.photoDone) continue;
+      if (game.time - p.thrownAt < 1.6 || p.z > 3) {
+        const f = inFrame(p.x, p.y, p.floor);
+        if (f) shots.push({ label: 'Летящий предмет', base: 12, q: quality(f), risk: 1, mark: p });
+      }
+    }
+    if (world.cursed && !world.cursed.photoDone) {
+      const f = inFrame(world.cursed.x, world.cursed.y, world.cursed.floor);
+      if (f) shots.push({ label: 'Проклятый предмет', base: 10, q: quality(f), risk: 1, mark: world.cursed });
+    }
+
+    if (!shots.length) {
+      game.photos.push({ label: 'Пустой кадр', rating: '—', reward: 0 });
+      game.log('В кадре ничего нет');
+      return;
+    }
+    shots.sort((a, b) => b.base * b.q * b.risk - a.base * a.q * a.risk);
+    const best = shots[0];
+    if (best.mark) best.mark.photoDone = true;
+    const reward = Math.round(best.base * best.q * best.risk);
+    const rating = best.q > 0.75 ? 'отличный кадр' : best.q > 0.5 ? 'хороший кадр' : 'смазанный кадр';
+    game.photos.push({ label: best.label, rating, reward });
+    game.log(`Фото: ${best.label} — ${rating}, +$${reward}`, 'evidence');
+    if (best.key === 'ghost') game.checkObjective('photoGhost');
   },
 
   // показания активного предмета, вызывается каждый кадр
@@ -148,6 +230,9 @@ export const equipment = {
     if (item === 'uv') {
       return { name: ITEMS.uv.name, value: pl.flashlightOn ? 'ВКЛ' : 'ВЫКЛ' };
     }
+    if (item === 'photo') {
+      return { name: ITEMS.photo.name, value: `КАДРОВ: ${game.itemUses.photo ?? 0}`, danger: (game.itemUses.photo ?? 0) === 0 };
+    }
     const meta = ITEMS[item];
     if (meta.consumable) {
       return { name: meta.name, value: `×${game.itemUses[item] ?? 0}` };
@@ -220,6 +305,7 @@ export const equipment = {
       return;
     }
 
+    if (item === 'photo') { this.takePhoto(game); return; }
     if (item === 'spirit') { this.askSpirit(game); return; }
     if (item === 'uv' || item === 'emf' || item === 'thermo') {
       // просто переключить фонарик для удобства
