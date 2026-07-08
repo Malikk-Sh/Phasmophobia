@@ -218,12 +218,14 @@ export const audio = {
     const synthScale = assetsAvailable ? 0.35 : 1;
     droneGain.gain.linearRampToValueAtTime((indoors ? (basement ? 0.05 : 0.035) : 0.015) * synthScale, t + 1.2);
     windGain.gain.linearRampToValueAtTime((indoors ? 0.006 : 0.03) * synthScale, t + 1.2);
-    // дождь: снаружи в полную силу, в доме — приглушённо по крыше, в подвале — нет
-    rainGain.gain.linearRampToValueAtTime((indoors ? (basement ? 0 : 0.008) : 0.035) * synthScale, t + 1.2);
+    // дождь: снаружи в полную силу, в доме — приглушённо по крыше, в подвале — нет.
+    // Общая громкость дождя снижена на 30% (RAIN_VOL).
+    const RAIN_VOL = 0.7;
+    rainGain.gain.linearRampToValueAtTime((indoors ? (basement ? 0 : 0.008) : 0.035) * synthScale * RAIN_VOL, t + 1.2);
     if (sampleAmbience) {
       sampleAmbience.roomtone?.gain.gain.linearRampToValueAtTime(indoors && !basement ? 0.22 : 0, t + 1.2);
       sampleAmbience.basement?.gain.gain.linearRampToValueAtTime(indoors && basement ? 0.28 : 0, t + 1.2);
-      sampleAmbience.rain?.gain.gain.linearRampToValueAtTime(indoors ? (basement ? 0 : 0.08) : 0.32, t + 1.2);
+      sampleAmbience.rain?.gain.gain.linearRampToValueAtTime((indoors ? (basement ? 0 : 0.08) : 0.32) * RAIN_VOL, t + 1.2);
       sampleAmbience.wind?.gain.gain.linearRampToValueAtTime(indoors ? 0.04 : 0.22, t + 1.2);
     }
   },
@@ -579,11 +581,14 @@ export const audio = {
     tone({ type: 'sine', freq: 1320, slide: 660, dur: 2.2, gain: 0.02, vib: 40, vibRate: 6 });
   },
 
-  crucifixBurn() {
+  wardPulse() {
     if (!this.ready) return;
-    if (playSample('item.crucifixBurn', { gain: 0.65 })) return;
-    noise({ dur: 0.8, type: 'highpass', freq: 2200, gain: 0.12 });
-    tone({ type: 'sine', freq: 660, slide: 1200, dur: 0.5, gain: 0.06 });
+    if (playSample('item.wardPulse', { gain: 0.65 })) return;
+    // холодный защитный звон-«отражение»: чистый резонанс + гаснущий призвук
+    tone({ type: 'sine', freq: 528, dur: 1.4, gain: 0.07, attack: 0.004 });
+    tone({ type: 'sine', freq: 792, dur: 1.2, gain: 0.035, attack: 0.004 });
+    tone({ type: 'sine', freq: 1584, dur: 0.9, gain: 0.014, attack: 0.004 });
+    noise({ dur: 0.5, type: 'bandpass', freq: 4200, q: 10, gain: 0.04, attack: 0.002 });
   },
 
   smudgeUse() {

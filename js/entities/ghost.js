@@ -498,16 +498,16 @@ export class Ghost {
     if (!ok) return false;
     if (Math.random() > 0.55 && !force) return false;
 
-    // распятие
+    // оберег отводит охоту
     for (const cr of this.world.placed) {
-      if (cr.type !== 'crucifix' || cr.floor !== this.floor || cr.charges <= 0) continue;
+      if (cr.type !== 'ward' || cr.floor !== this.floor || cr.charges <= 0) continue;
       if (Math.hypot(cr.x - this.x, cr.y - this.y) < TILE * 3.2) {
         cr.charges--;
         cr.burnT = 1.5;
-        audio.crucifixBurn();
-        game.log('Распятие предотвратило охоту!');
+        audio.wardPulse();
+        game.log('Оберег отвёл охоту!');
         this.huntCooldown = 12;
-        game.stats.crucifixSaves++;
+        game.stats.wardSaves++;
         return false;
       }
     }

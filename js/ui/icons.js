@@ -19,7 +19,7 @@ const P = {
   photo: '<path d="M4 8h3.5L9 6h6l1.5 2H20v11H4z"/><circle cx="12" cy="13.2" r="3.2"/><path d="M17.5 10.3h1"/>',
   book: '<path d="M12 6.5C10 5 7 4.9 4 5.8V19c3-.9 6-.8 8 .7 2-1.5 5-1.6 8-.7V5.8c-3-.9-6-.8-8 .7z"/><path d="M12 6.5V19.7"/>',
   dots: '<circle cx="6" cy="6" r="1.1" fill="currentColor"/><circle cx="12" cy="6" r="1.1" fill="currentColor"/><circle cx="18" cy="6" r="1.1" fill="currentColor"/><circle cx="6" cy="12" r="1.1" fill="currentColor"/><circle cx="12" cy="12" r="1.1" fill="currentColor"/><circle cx="18" cy="12" r="1.1" fill="currentColor"/><circle cx="6" cy="18" r="1.1" fill="currentColor"/><circle cx="12" cy="18" r="1.1" fill="currentColor"/><circle cx="18" cy="18" r="1.1" fill="currentColor"/>',
-  crucifix: '<path d="M12 3.5v17M7.5 9h9"/>',
+  ward: '<path d="M12 2.5v3"/><path d="M12 5.5l5 5-5 9-5-9z"/><circle cx="12" cy="10.5" r="2"/><path d="M9 15.5l-1.5 3M15 15.5l1.5 3"/>',
   smudge: '<path d="M10 21c-1.2-3.6-.8-7 2-9.8 2.8 2.8 3.2 6.2 2 9.8-1.3.5-2.7.5-4 0z"/><path d="M12 8.5c-1.2-1.6.8-2.6-.3-4.5M14.5 9.5c-.8-1.2.5-2-.2-3.2"/>',
   salt: '<path d="M9 10h6l1.2 10H7.8z"/><path d="M9.7 10V7a2.3 2.3 0 0 1 4.6 0v3"/><circle cx="11" cy="14" r=".7" fill="currentColor"/><circle cx="13.2" cy="16.5" r=".7" fill="currentColor"/>',
   pills: '<path d="M7.2 12.4l5.2-5.2a3.4 3.4 0 0 1 4.8 4.8l-5.2 5.2a3.4 3.4 0 0 1-4.8-4.8z"/><path d="M9.8 9.8l4.4 4.4"/>',

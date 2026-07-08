@@ -36,9 +36,9 @@ export const ITEMS = {
     name: 'DOTS-проектор', icon: 'dots', place: true,
     desc: 'Проецирует лазерную сетку. Часть призраков проявляется в ней зелёным силуэтом.',
   },
-  crucifix: {
-    name: 'Распятие', icon: 'crucifix', place: true,
-    desc: 'Не даёт призраку начать охоту рядом с собой. Два заряда, затем сгорает.',
+  ward: {
+    name: 'Оберег', icon: 'ward', place: true,
+    desc: 'Старинный защитный амулет. Не даёт призраку начать охоту рядом с собой. Два заряда, затем гаснет.',
   },
   smudge: {
     name: 'Благовония', icon: 'smudge', consumable: 2,
@@ -110,9 +110,9 @@ export const equipment = {
     }
     for (const p of world.placed) {
       if (p.photoDone) continue;
-      if (p.type === 'crucifix' && p.charges <= 0) {
+      if (p.type === 'ward' && p.charges <= 0) {
         const f = inFrame(p.x, p.y, p.floor);
-        if (f) shots.push({ label: 'Сгоревшее распятие', base: 8, q: quality(f), risk: 1, mark: p });
+        if (f) shots.push({ label: 'Погасший оберег', base: 8, q: quality(f), risk: 1, mark: p });
       }
       if (p.type === 'book' && p.written) {
         const f = inFrame(p.x, p.y, p.floor);
@@ -261,7 +261,7 @@ export const equipment = {
       world.placed.push({
         type: item, x: px, y: py, floor: pl.floor,
         angle: pl.angle, written: false, seen: false,
-        charges: item === 'crucifix' ? 2 : 0, burnT: 0, phase: Math.random() * 6.28,
+        charges: item === 'ward' ? 2 : 0, burnT: 0, phase: Math.random() * 6.28,
       });
       pl.inventory[pl.activeSlot] = null;
       audio.cameraPlace();
@@ -397,24 +397,40 @@ export function drawPlaced(ctx, it, t, game) {
       const r = (i % 7 + 2.5) / 9.5 * R;
       ctx.fillRect(Math.cos(a) * r, Math.sin(a) * r, 1.6, 1.6);
     }
-  } else if (it.type === 'crucifix') {
+  } else if (it.type === 'ward') {
     ctx.fillStyle = 'rgba(0,0,0,.3)';
     ctx.beginPath(); ctx.ellipse(1, 2, 5, 4, 0, 0, 7); ctx.fill();
     const dead = it.charges <= 0;
-    ctx.strokeStyle = dead ? '#3a3630' : '#c8a860';
-    ctx.lineWidth = 2.4;
+    // ровное холодное свечение живого оберега
+    if (!dead) {
+      const p = 0.5 + Math.sin(t * 2.4) * 0.3;
+      const gl = ctx.createRadialGradient(0, 0, 1, 0, 0, 12);
+      gl.addColorStop(0, `rgba(150,190,220,${0.3 * p})`);
+      gl.addColorStop(1, 'rgba(150,190,220,0)');
+      ctx.fillStyle = gl;
+      ctx.beginPath(); ctx.arc(0, 0, 12, 0, 7); ctx.fill();
+    }
+    // амулет-ромб с камнем в центре и подвесами
+    ctx.strokeStyle = dead ? '#3a3630' : '#b9a56a';
+    ctx.lineWidth = 1.6;
     ctx.beginPath();
-    ctx.moveTo(0, -7); ctx.lineTo(0, 7);
-    ctx.moveTo(-4.5, -2.5); ctx.lineTo(4.5, -2.5);
+    ctx.moveTo(0, -7.5); ctx.lineTo(4.5, -1); ctx.lineTo(0, 8); ctx.lineTo(-4.5, -1); ctx.closePath();
     ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(0, -7.5); ctx.lineTo(0, -9.5); ctx.stroke(); // шнур
+    ctx.fillStyle = dead ? '#2c3238' : '#5f86a0';
+    ctx.beginPath(); ctx.arc(0, -1, 2, 0, 7); ctx.fill(); // камень
+    ctx.strokeStyle = dead ? '#2c2822' : '#8a7a4a';
+    ctx.beginPath(); ctx.moveTo(-3, 3); ctx.lineTo(-4.5, 6.5); ctx.moveTo(3, 3); ctx.lineTo(4.5, 6.5); ctx.stroke(); // подвесы
+    // вспышка защиты при отражении охоты
     if (it.burnT > 0) {
       it.burnT -= 0.016;
       const a = Math.max(0, it.burnT / 1.5);
-      const g = ctx.createRadialGradient(0, 0, 2, 0, 0, TILE * 3.2);
-      g.addColorStop(0, `rgba(255,180,80,${a * 0.5})`);
-      g.addColorStop(1, 'rgba(255,120,40,0)');
+      const g = ctx.createRadialGradient(0, 0, 2, 0, 0, TILE * 3.4);
+      g.addColorStop(0, `rgba(150,200,235,${a * 0.55})`);
+      g.addColorStop(0.5, `rgba(120,170,220,${a * 0.25})`);
+      g.addColorStop(1, 'rgba(120,170,220,0)');
       ctx.fillStyle = g;
-      ctx.beginPath(); ctx.arc(0, 0, TILE * 3.2, 0, 7); ctx.fill();
+      ctx.beginPath(); ctx.arc(0, 0, TILE * 3.4, 0, 7); ctx.fill();
     }
   }
   ctx.restore();

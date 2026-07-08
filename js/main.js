@@ -62,7 +62,7 @@ const game = {
   aggression: 0,
   deathT: 0,
   lightningT: 12,
-  stats: { crucifixSaves: 0, smudgeSaves: 0 },
+  stats: { wardSaves: 0, smudgeSaves: 0 },
   progress: loadProgress(),
 
   log(msg, cls = '') { hud.toast(msg, cls); },
@@ -85,7 +85,7 @@ const game = {
     this.journalMarks = {};
     this.journalPick = null;
     this.vanCamIndex = 0;
-    this.stats = { crucifixSaves: 0, smudgeSaves: 0 };
+    this.stats = { wardSaves: 0, smudgeSaves: 0 };
     this.deathT = 0;
     this.fx.clear();
 

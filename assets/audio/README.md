@@ -36,7 +36,7 @@ Supported keys:
 - `ghost.step`, `ghost.whisper`, `ghost.spiritResponse`, `ghost.event`, `ghost.event.lady`, `ghost.event.shadow`, `ghost.event.hangman`, `ghost.bansheeWail`, `ghost.writing`
 - `door.creak`, `door.slam`, `switch.click`, `breaker.on`, `breaker.off`, `house.creak`, `radio.crackle`
 - `prop.whoosh`, `prop.impact.hard`, `prop.impact.soft`
-- `item.crucifixBurn`, `item.smudge`, `item.saltPour`, `item.pills`, `item.cameraPlace`
+- `item.wardPulse`, `item.smudge`, `item.saltPour`, `item.pills`, `item.cameraPlace`, `item.shutter`
 - `hunt.start`, `hunt.end`, `weather.thunder`, `ui.click`
 
 If a key is absent or a file fails to load, the procedural sound for that action is used automatically.
