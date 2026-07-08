@@ -1,6 +1,6 @@
 // ФАЗМОФОБИЯ — точка входа: игровой цикл, стейт-машина, взаимодействия.
 
-import { TILE, clamp, rndPick, dist, hasLOS, rndRange } from './core/utils.js';
+import { TILE, clamp, rndPick, dist, hasLOS, rndRange, makeRng, setRng } from './core/utils.js';
 import { input } from './core/input.js';
 import { Camera } from './core/camera.js';
 import { audio } from './core/audio.js';
@@ -35,7 +35,7 @@ const OBJECTIVE_POOL = [
   { key: 'freezeRead', name: 'Замерить температуру ниже 5°C' },
   { key: 'spirit', name: 'Получить ответ через спиритбокс' },
   { key: 'camera', name: 'Установить видеокамеру в комнате призрака' },
-  { key: 'smudgeHunt', name: 'Сорвать охоту благовониями' },
+  { key: 'smudgeHunt', name: 'Отогнать призрака благовониями во время охоты' },
   { key: 'salt', name: 'Заставить призрака потревожить соль' },
 ];
 
@@ -70,6 +70,11 @@ const game = {
   // ---------- Контракт ----------
   prepareContract(difficulty) {
     this.difficulty = difficulty;
+    // сидированный RNG контракта: неудачную партию можно воспроизвести
+    this.contractSeed = (Math.random() * 0x7fffffff) | 0;
+    this.rng = makeRng(this.contractSeed);
+    setRng(this.rng); // игровая логика контракта — на сидированном ГСЧ
+    this.hintCooldown = 0;
     this.world = buildWorld();
     furnish(this.world);
     this.renderer = new Renderer(this.world);
@@ -97,9 +102,12 @@ const game = {
       this.objectives.push({ ...o, done: false });
     }
 
-    this.setupPhase = true;
-    this.setupTimer = difficulty === 'pro' ? 0 : 120;
-    if (difficulty === 'pro') this.setupPhase = false;
+    // подготовка защищает от смерти, но НЕ отключает хоррор и улики:
+    // фоновые события, характерные проявления и улики идут с самого входа,
+    // запрещены лишь настоящие охоты и опасные проявления.
+    this.setupDuration = difficulty === 'pro' ? 0 : 80;
+    this.setupTimer = this.setupDuration;
+    this.setupPhase = difficulty !== 'pro';
 
     // процедурное досье жертвы — атмосфера контракта
     const first = rndPick(['Анна', 'Виктор', 'Ольга', 'Павел', 'Мария', 'Григорий', 'Тамара', 'Аркадий', 'Лидия', 'Семён']);
@@ -136,6 +144,9 @@ const game = {
     this.camera.snapTo(this.player.x, this.player.y);
     audio.setAmbience(false, false);
     this.log('Снаряжение — в фургоне. Удачи.');
+    // seed контракта для воспроизведения партий (debug)
+    try { console.info(`[contract] seed=${this.contractSeed} ghost=${this.ghost.data.key}`); } catch { /* нет консоли */ }
+    if (localStorage.getItem('phasmo-debug')) this.log(`SEED ${this.contractSeed} · ${this.ghost.data.key}`, 'evidence');
   },
 
   checkObjective(key) {
@@ -163,6 +174,57 @@ const game = {
   canHunt() {
     return this.state === 'playing' && !this.setupPhase &&
       this.player.alive && this.ghost.state !== 'hunt' && this.ghost.state !== 'event';
+  },
+
+  // опасные проявления и настоящие охоты запрещены до конца подготовки
+  canDanger() {
+    return this.state === 'playing' && !this.setupPhase && this.player.alive;
+  },
+
+  // Засчитать «Стать свидетелем» за реально пережитое событие, а не только
+  // за видимость модели призрака. source = {x,y,floor}.
+  markEventWitnessed(type, source) {
+    const pl = this.player;
+    if (!pl.alive) return;
+    const gh = this.ghost;
+    const near = (r) => source && source.floor === pl.floor &&
+      dist(source.x, source.y, pl.x, pl.y) < r;
+    let ok = false;
+    switch (type) {
+      case 'manifest':
+      case 'silhouette':
+        ok = gh && gh.seenByPlayer(pl);
+        break;
+      case 'lightsOut': {
+        const room = this.world.roomById(this.world.roomAt(pl.floor, pl.x, pl.y));
+        ok = !!(room && !room.lightOn); // игрок в комнате, где погас свет
+        break;
+      }
+      case 'falseHunt':
+        ok = gh && gh.fakeHuntT > 0 && gh.floor === pl.floor &&
+          dist(gh.x, gh.y, pl.x, pl.y) < TILE * 13;
+        break;
+      case 'knock':
+        ok = near(TILE * 6);
+        break;
+      case 'propStorm':
+        ok = near(TILE * 6) || (gh && gh.seenByPlayer(pl));
+        break;
+      case 'doorFury':
+        ok = near(TILE * 8);
+        break;
+      default:
+        ok = near(TILE * 6);
+    }
+    if (ok) this.checkObjective('event');
+  },
+
+  // Тихая обратная связь: подтвердить, что оборудование стоит правильно,
+  // не выдавая улику бесплатно. Не чаще одного намёка в ~18 c.
+  hint(msg) {
+    if ((this.hintCooldown || 0) > 0) return;
+    this.hintCooldown = 18;
+    this.log(msg);
   },
 
   onHuntStart() {
@@ -494,17 +556,33 @@ const game = {
       audio.setAmbience(indoors, pl.floor === FLOOR_BASEMENT);
     }
 
+    // тихая обратная связь: «правильно ли стоит оборудование»
+    this.hintCooldown = Math.max(0, (this.hintCooldown || 0) - dt);
+
     // объективка: замер холода
     if (pl.currentItem() === 'thermo') {
       const room = this.world.roomById(this.world.roomAt(pl.floor, pl.x, pl.y));
       if (room && room.temp < 5) this.checkObjective('freezeRead');
+      // температура падает, но ещё не улика — подсказать, что комната «та самая»
+      if (room && room.id === this.ghost.roomId && room.temp > 0 && room.temp < 6 &&
+        this.ghost.data.ev.includes('freezing')) {
+        this.hint('Температура продолжает падать.');
+      }
     }
     if (equipment.emfLevel >= 2) this.checkObjective('emfAny');
-    // событие засчитывается, только если игрок его реально видел или слышал вплотную
-    if (this.ghost.state === 'event' &&
-      (this.ghost.seenByPlayer(pl) ||
-        (this.ghost.floor === pl.floor && dist(this.ghost.x, this.ghost.y, pl.x, pl.y) < TILE * 3.5))) {
-      this.checkObjective('event');
+    // спиритбокс в верных условиях, но пока без ответа — «помехи стали плотнее»
+    if (pl.currentItem() === 'spirit' && !pl.hidden) {
+      const room = this.world.roomById(this.world.roomAt(pl.floor, pl.x, pl.y));
+      const dark = !room || !room.lightOn || !this.world.breaker.on;
+      const near = this.ghost.floor === pl.floor && dist(this.ghost.x, this.ghost.y, pl.x, pl.y) < TILE * 6;
+      if (dark && near && this.ghost.data.ev.includes('spirit') && equipment.spiritCooldown <= 0) {
+        this.hint('Помехи стали плотнее…');
+      }
+    }
+    // событие засчитывается за реальное переживание, а не только видимость модели
+    if (this.ghost.state === 'event') {
+      this.markEventWitnessed(this.ghost.eventType || 'manifest',
+        { x: this.ghost.x, y: this.ghost.y, floor: this.ghost.floor });
     }
     // соль как задача
     if (this.world.saltPiles.some(s => s.disturbed && s.steps.length)) this.checkObjective('salt');
@@ -608,6 +686,12 @@ const game = {
     const visPoly = computeVisibility(pl.x, pl.y, occl, maxR);
     this.lighting.render(this, cam, visPoly);
     this.lighting.compose(ctx, cam.viewW, cam.viewH);
+
+    // периферийное наблюдение освещённых комнат через открытую дверь
+    // (отдельный слой поверх тьмы; не влияет на LOS, фото и улики)
+    if (!pl.hidden && this.world.isIndoors(pl.floor, pl.x, pl.y)) {
+      this.renderer.drawPeripheralLitRooms(ctx, this, cam);
+    }
 
     // пост-эффекты
     this.fx.drawScreen(ctx, cam.viewW, cam.viewH, this);

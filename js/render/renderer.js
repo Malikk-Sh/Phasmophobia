@@ -580,6 +580,114 @@ export class Renderer {
     }
   }
 
+  // ---------- Периферийное наблюдение освещённых комнат ----------
+  // Отдельный визуальный слой (НЕ участвует в computeVisibility/hasLOS,
+  // не помогает фото и не засчитывает улики). Через открытую дверь игрок
+  // ловит слабый мутный силуэт освещённой смежной комнаты: свет, крупные
+  // контуры, движение предметов, помехи, изредка — силуэт призрака.
+  drawPeripheralLitRooms(ctx, game, cam) {
+    const { world, player } = game;
+    if (!world.breaker.on) return;
+    const floor = player.floor;
+    const grid = world.floors[floor];
+    if (!grid) return;
+    const playerRoom = grid.roomAt(Math.floor(player.x / TILE), Math.floor(player.y / TILE));
+    const amateur = game.difficulty !== 'pro';
+    const baseAlpha = amateur ? 0.28 : 0.15;   // 25–30% / 10–18%
+    const RANGE = TILE * 10;                    // не длиннее ~8–10 тайлов
+
+    const seen = new Set();
+    cam.apply(ctx);
+    for (const d of world.doors) {
+      if (d.floor !== floor || d.isFront) continue;
+      if (d.swing < 0.6) continue;              // закрытая дверь полностью блокирует обзор
+      const dcx = (d.tx + 0.5) * TILE, dcy = (d.ty + 0.5) * TILE;
+      const distToDoor = Math.hypot(dcx - player.x, dcy - player.y);
+      if (distToDoor > RANGE) continue;
+      // комнаты по обе стороны двери (только прямая смежность — не цепочка)
+      let aId, bId;
+      if (d.orient === 'h') { aId = grid.roomAt(d.tx, d.ty - 1); bId = grid.roomAt(d.tx, d.ty + 1); }
+      else { aId = grid.roomAt(d.tx - 1, d.ty); bId = grid.roomAt(d.tx + 1, d.ty); }
+      for (const rid of [aId, bId]) {
+        if (rid < 0 || rid === playerRoom || seen.has(rid)) continue;
+        const room = world.roomById(rid);
+        if (!room || !room.lightOn || room.lightBroken) continue;
+        seen.add(rid);
+        const a = baseAlpha * clamp(1 - distToDoor / RANGE, 0.2, 1);
+        this.paintPeripheralRoom(ctx, game, room, a);
+      }
+    }
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+  }
+
+  paintPeripheralRoom(ctx, game, room, alpha) {
+    const t = game.time;
+    const { world, player } = game;
+    // мерцание: свет комнаты «дышит», иногда проседает как при активности
+    const flick = 0.7 + Math.sin(t * 8 + room.id) * 0.12 + (Math.random() < 0.04 ? -0.45 : 0);
+    ctx.save();
+    ctx.beginPath();
+    for (const r of room.rects) ctx.rect(r.x * TILE, r.y * TILE, r.w * TILE, r.h * TILE);
+    ctx.clip();
+
+    // общий мутный тёплый свет комнаты
+    ctx.fillStyle = `rgba(150,138,110,${clamp(alpha * flick, 0, 1)})`;
+    for (const r of room.rects) ctx.fillRect(r.x * TILE, r.y * TILE, r.w * TILE, r.h * TILE);
+
+    // крупные тёмные контуры мебели
+    ctx.fillStyle = `rgba(10,10,14,${alpha * 1.3})`;
+    for (const c of world.colliders[room.floor] || []) {
+      if (world.roomAt(room.floor, c.x + c.w / 2, c.y + c.h / 2) !== room.id) continue;
+      ctx.fillRect(c.x, c.y, c.w, c.h);
+    }
+
+    // движущиеся предметы — заметны как светлые мазки
+    for (const p of world.props) {
+      if (p.floor !== room.floor) continue;
+      if (world.roomAt(p.floor, p.x, p.y) !== room.id) continue;
+      const moving = (game.time - (p.thrownAt || -9)) < 1.6 || p.z > 3 || Math.abs(p.vx) + Math.abs(p.vy) > 8;
+      if (!moving) continue;
+      ctx.fillStyle = `rgba(210,205,190,${alpha * 1.8})`;
+      ctx.beginPath(); ctx.arc(p.x, p.y - p.z, 3.5, 0, 7); ctx.fill();
+    }
+
+    // помехи телевизора в освещённой гостиной
+    if (room.key === 'living' && game.tvStaticT > 0) {
+      ctx.fillStyle = `rgba(160,190,220,${alpha * 2 * Math.random()})`;
+      ctx.fillRect(25.6 * TILE - 30, 18.35 * TILE - 6, 60, 10);
+    }
+
+    // страницы книги шевельнулись (сам факт записи засчитывается только вблизи)
+    for (const pl of world.placed) {
+      if (pl.type !== 'book' || pl.floor !== room.floor || !(pl.stir > 0)) continue;
+      ctx.fillStyle = `rgba(220,214,196,${alpha * 1.4 * (0.5 + Math.random() * 0.5)})`;
+      ctx.fillRect(pl.x - 6, pl.y - 4, 12, 8);
+    }
+
+    // силуэт призрака — редко и мутно
+    const gh = game.ghost;
+    if (gh && gh.floor === room.floor && world.roomAt(gh.floor, gh.x, gh.y) === room.id) {
+      if (gh.state === 'hunt' || gh.visibleAlpha > 0.1 || Math.random() < 0.03) {
+        ctx.fillStyle = `rgba(6,6,12,${alpha * 2})`;
+        ctx.beginPath(); ctx.ellipse(gh.x, gh.y - 6, 8, 16, 0, 0, 7); ctx.fill();
+      }
+    }
+
+    // при низком рассудке — ложное движение/тень: игрок не уверен, реально ли
+    if (player.sanity < 35 && Math.random() < 0.02) {
+      const r = room.rects[0];
+      const fx = (r.x + 0.5 + Math.random() * (r.w - 1)) * TILE;
+      const fy = (r.y + 0.5 + Math.random() * (r.h - 1)) * TILE;
+      ctx.fillStyle = `rgba(4,4,9,${alpha * 1.6})`;
+      ctx.beginPath(); ctx.ellipse(fx, fy - 4, 6, 13, 0, 0, 7); ctx.fill();
+    }
+
+    // тревожное затемнение/зерно поверх слоя
+    ctx.fillStyle = `rgba(0,0,10,${alpha * 0.6})`;
+    for (const r of room.rects) ctx.fillRect(r.x * TILE, r.y * TILE, r.w * TILE, r.h * TILE);
+    ctx.restore();
+  }
+
   drawCursed(ctx, cu, t) {
     ctx.save();
     ctx.translate(cu.x, cu.y);
