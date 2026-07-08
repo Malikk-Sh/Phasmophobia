@@ -54,13 +54,21 @@ export const worldSim = {
     // температура комнат
     for (const room of world.rooms) {
       let target = room.baseTemp;
+      let rate = 0.04;
       if (gh && room.id === gh.roomId) {
         target = gh.data.ev.includes('freezing') ? -6 : 3;
+        // логово с уликой «мороз» надёжно уходит ниже нуля; на «Любителе» —
+        // заметно быстрее, чтобы игрок не сомневался, настоящая ли это комната
+        if (gh.data.ev.includes('freezing')) rate = game.difficulty === 'pro' ? 0.05 : 0.09;
       } else if (gh && world.roomAt(gh.floor, gh.x, gh.y) === room.id) {
         target = Math.min(target, 6);
       }
       if (room.lightOn && world.breaker.on) target += 2;
-      room.temp = damp(room.temp, target, 0.04, dt);
+      // после миграции новая комната остывает ускоренно (сигнал смены зоны)
+      if (room.coolBoost > 0) { rate = Math.max(rate, 0.13); room.coolBoost -= dt; }
+      // старая комната после миграции резко «затихает» и прогревается быстрее
+      if (room.hush > 0) { rate = Math.max(rate, 0.1); room.hush -= dt; }
+      room.temp = damp(room.temp, target, rate, dt);
     }
 
     // орбы дрейфуют
@@ -132,8 +140,6 @@ export const worldSim = {
           game.log('Соль потревожена!');
         }
       }
-      // DOTS
-      gh.checkDots(game);
     }
   },
 };

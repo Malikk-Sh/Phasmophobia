@@ -42,7 +42,7 @@ export const ITEMS = {
   },
   smudge: {
     name: 'Благовония', icon: 'smudge', consumable: 2,
-    desc: 'Подожгите рядом с призраком: отгоняет его и срывает охоту. Держите на случай беды.',
+    desc: 'Ослепляют призрака и заставляют его потерять ваш след на несколько секунд. Онрё может полностью прекратить охоту.',
   },
   salt: {
     name: 'Соль', icon: 'salt', consumable: 3,
@@ -67,6 +67,7 @@ export const equipment = {
     this.fakeEmfT = 0;
     game.itemUses = { smudge: 2, salt: 3, pills: 1, photo: 5 };
     game.photos = [];
+    game.ghostPhotoCount = 0;
   },
 
   // ---------- Фотокамера ----------
@@ -139,10 +140,23 @@ export const equipment = {
     shots.sort((a, b) => b.base * b.q * b.risk - a.base * a.q * a.risk);
     const best = shots[0];
     if (best.mark) best.mark.photoDone = true;
-    const reward = Math.round(best.base * best.q * best.risk);
-    const rating = best.q > 0.75 ? 'отличный кадр' : best.q > 0.5 ? 'хороший кадр' : 'смазанный кадр';
+    let reward = best.base * best.q * best.risk;
+    // Баланс: первое фото призрака — полная награда, повторные — сильно меньше;
+    // нельзя фармить серию одинаковых кадров одного проявления. Фото разных
+    // объектов и снимок во время охоты (risk-множитель) поощряются сильнее.
+    if (best.key === 'ghost') {
+      const n = game.ghostPhotoCount || 0;
+      const mult = n === 0 ? 1 : n <= 2 ? 0.35 : 0;
+      reward *= mult;
+      game.ghostPhotoCount = n + 1;
+    }
+    reward = Math.round(reward);
+    const rating = reward <= 0 ? 'уже снято'
+      : best.q > 0.75 ? 'отличный кадр' : best.q > 0.5 ? 'хороший кадр' : 'смазанный кадр';
     game.photos.push({ label: best.label, rating, reward });
-    game.log(`Фото: ${best.label} — ${rating}, +$${reward}`, 'evidence');
+    game.log(reward > 0
+      ? `Фото: ${best.label} — ${rating}, +$${reward}`
+      : `Фото: ${best.label} — повтор, без награды`, reward > 0 ? 'evidence' : '');
     if (best.key === 'ghost') game.checkObjective('photoGhost');
   },
 
@@ -277,8 +291,11 @@ export const equipment = {
       const gh = game.ghost;
       if (gh && gh.floor === pl.floor && Math.hypot(gh.x - pl.x, gh.y - pl.y) < TILE * 6) {
         const wasHunt = gh.state === 'hunt';
+        const stopped = wasHunt && gh.tr.smudgeInstant; // только Онрё прекращает охоту
         gh.smudge(game);
-        game.log(wasHunt ? 'Охота сорвана благовониями!' : 'Призрак отогнан благовониями');
+        game.log(wasHunt
+          ? (stopped ? 'Онрё прекратил охоту!' : 'Призрак потерял ваш след!')
+          : 'Призрак отогнан благовониями');
         if (wasHunt) game.checkObjective('smudgeHunt');
       }
       return;
@@ -326,14 +343,21 @@ export const equipment = {
       const room = game.world.roomById(game.world.roomAt(pl.floor, pl.x, pl.y));
       const dark = !room || !room.lightOn || !game.world.breaker.on;
       const near = gh.floor === pl.floor && Math.hypot(gh.x - pl.x, gh.y - pl.y) < TILE * 6;
-      if (gh.data.ev.includes('spirit') && dark && near && Math.random() < 0.75) {
-        audio.spiritResponse();
-        game.log(`Спиритбокс: «${rndPick(RESPONSES)}»`, 'evidence');
-        game.onEvidenceSeen('spirit');
-        gh.activity = Math.min(10, gh.activity + 2);
-      } else {
-        game.log('…только помехи…');
+      const correct = gh.data.ev.includes('spirit') && dark && near;
+      // pity: при верных условиях третий корректный вопрос гарантирует ответ.
+      // Неверные условия дают только помехи и счётчик не двигают.
+      if (correct) {
+        gh.spiritQ = (gh.spiritQ || 0) + 1;
+        if (gh.spiritQ >= 3 || Math.random() < 0.6) {
+          gh.spiritQ = 0;
+          audio.spiritResponse();
+          game.log(`Спиритбокс: «${rndPick(RESPONSES)}»`, 'evidence');
+          game.onEvidenceSeen('spirit');
+          gh.activity = Math.min(10, gh.activity + 2);
+          return;
+        }
       }
+      game.log('…только помехи…');
     }, 1400);
   },
 };

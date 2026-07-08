@@ -32,9 +32,16 @@ export function makeRng(seed) {
   rng.pick = (arr) => arr[Math.floor(rng() * arr.length)];
   return rng;
 }
-export const rnd = Math.random;
-export const rndRange = (a, b) => a + Math.random() * (b - a);
-export const rndPick = (arr) => arr[Math.floor(Math.random() * arr.length)];
+// Активный источник случайности для игровой логики. По умолчанию Math.random,
+// но на время контракта подменяется сидированным ГСЧ (см. setRng) — так
+// неудачную партию можно воспроизвести для отладки таймингов улик.
+// Внимание: рендер и аудио намеренно продолжают использовать Math.random,
+// чтобы кадровая случайность не рассинхронизировала симуляцию.
+let _rng = Math.random;
+export function setRng(fn) { _rng = fn || Math.random; }
+export const rnd = () => _rng();
+export const rndRange = (a, b) => a + _rng() * (b - a);
+export const rndPick = (arr) => arr[Math.floor(_rng() * arr.length)];
 
 // --- Пересечение луча с отрезком ---
 // Луч (px,py)+(dx,dy)*t, отрезок (x1,y1)-(x2,y2). Возвращает t или Infinity.

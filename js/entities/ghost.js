@@ -53,6 +53,17 @@ export class Ghost {
     this.sway = Math.random() * 10;
     this.speed = 40;
     this.huntBaseSpeed = 76;
+
+    // «давление улик» (pity): гарантирует появление настоящей улики при
+    // корректных условиях, чтобы характер призрака не блокировал дедукцию.
+    this.pity = {
+      writeT: 0, writeCheck: rndRange(3, 4), awayT: 0, shadeGuard: rndRange(30, 45),
+      emfCount: 0, emfNeed: 4 + (Math.random() * 3 | 0),   // 4..6 событий → гарантия ЭМП-5
+      uvCount: 0, uvNeed: 2 + (Math.random() * 2 | 0),     // 2..3 касания → гарантия отпечатка
+      dotsT: 0,
+    };
+    this.spiritQ = 0;               // корректные вопросы к спиритбоксу подряд
+    this.signatureCooldown = rndRange(18, 30);
   }
 
   get room() { return this.world.roomById(this.roomId); }
@@ -67,7 +78,11 @@ export class Ghost {
     this.fakeHuntT = Math.max(0, this.fakeHuntT - dt);
     this.lingerT = Math.max(0, this.lingerT - dt);
     this.activity = Math.max(0, this.activity - dt * 0.35);
+    this.signatureCooldown = Math.max(0, this.signatureCooldown - dt);
     this.sway += dt;
+
+    // надёжная выдача улик отдельно от случайного поведения
+    if (this.state !== 'hunt') this.updateEvidence(dt, game);
 
     // плавная видимость
     this.visibleAlpha += (this.targetAlpha - this.visibleAlpha) * Math.min(1, dt * 6);
@@ -214,10 +229,24 @@ export class Ghost {
     const phase = (game.setupPhase || !dir) ? 'calm' : dir.phase;
     this.actionT = (phase === 'omen' || phase === 'reveal')
       ? rndRange(1.5, 3)
-      : rndRange(3.5, 8) * (shy ? 1.8 : 1);
+      : rndRange(3.5, 8) * (shy ? 1.7 : 1);
 
-    // Тень избегает активности рядом с игроком
-    if (shy && playerNear && Math.random() < 0.7) return;
+    // ── Гарантии активности (работают в любой фазе) ──────────────────
+    // характерное действие: не молчать характером слишком долго
+    if (dir?.signatureDue && this.signatureCooldown <= 0 && this.canSignatureNow(game)) {
+      if (this.doSignature(game, playerNear)) {
+        this.signatureCooldown = rndRange(this.tr.randomHunt ? 12 : 20, this.tr.randomHunt ? 22 : 34);
+        dir.note('sig', game, 'signature');
+        return;
+      }
+    }
+    // фоновое событие: дом не должен молчать дольше ~20 c
+    if (dir?.ambientDue) {
+      if (this.doAmbient(game, playerNear)) { dir.note('ambient', game, 'ambient'); return; }
+    }
+
+    // Тень избегает активности рядом с игроком (тишина — это характер, не баг)
+    if (shy && playerNear && Math.random() < 0.85) return;
 
     switch (phase) {
       case 'calm':
@@ -271,7 +300,7 @@ export class Ghost {
         if (game.canHunt() && this.tryStartHunt(game)) return;
         if (playerNear && dir?.allow('event', 22, game)) {
           this.startEvent(game);
-          dir?.note('event', game);
+          dir?.note('event', game, 'event');
         }
         break;
 
@@ -280,21 +309,251 @@ export class Ghost {
     }
   }
 
+  // ---------- Надёжная выдача улик (pity / evidence pressure) ----------
+  // Характер призрака влияет на форму проявления, но не может бесконечно
+  // блокировать истинную улику: при корректных условиях накапливается
+  // validTime, растёт шанс, и после максимума улика гарантируется.
+  updateEvidence(dt, game) {
+    const pl = game.player;
+    const inLair = pl.floor === this.floor &&
+      game.world.roomAt(pl.floor, pl.x, pl.y) === this.roomId;
+    this.pity.awayT = inLair ? 0 : this.pity.awayT + dt;
+    this.updateWriting(dt, game);
+    this.updateDotsPressure(dt, game);
+  }
+
+  updateWriting(dt, game) {
+    if (!this.data.ev.includes('writing')) return;
+    const p = this.pity;
+    const curRoom = game.world.roomAt(this.floor, this.x, this.y);
+    const book = game.world.placed.find(b =>
+      b.type === 'book' && !b.written && b.floor === this.floor &&
+      (game.world.roomAt(b.floor, b.x, b.y) === this.roomId ||
+        game.world.roomAt(b.floor, b.x, b.y) === curRoom) &&
+      Math.hypot(b.x - this.x, b.y - this.y) < TILE * 9);
+    if (!book) { p.writeT = Math.max(0, p.writeT - dt * 0.5); return; }
+
+    const pl = game.player;
+    const playerNearBook = pl.floor === book.floor &&
+      Math.hypot(pl.x - book.x, pl.y - book.y) < TILE * 3.5;
+
+    if (this.tr.shy) {
+      // Тень пишет, только когда её не видят. Рядом — почти замирает.
+      if (playerNearBook) { p.writeT = Math.max(0, p.writeT - dt); book.stir = Math.max(0, (book.stir || 0) - dt); return; }
+      if (p.awayT < 10) { book.stir = Math.max(0, (book.stir || 0) - dt); return; }
+      p.writeT += dt;
+      book.stir = 1; // страницы шевелятся — сигнал через открытую дверь
+      const guaranteed = p.awayT >= p.shadeGuard; // 30–45 c отсутствия → гарантия
+      p.writeCheck -= dt;
+      if (p.writeCheck <= 0) {
+        p.writeCheck = rndRange(3, 4);
+        const chance = 0.2 + Math.min(p.writeT / 25, 1) * 0.6;
+        if (guaranteed || Math.random() < chance) this.writeInBook(game, book);
+      }
+      return;
+    }
+
+    // обычные призраки: улика надёжна, но не мгновенна — первые ~10 c копится
+    // «давление», затем растёт шанс; гарантия за 60–90 c корректного размещения
+    p.writeT += dt;
+    book.stir = playerNearBook ? Math.max(0, (book.stir || 0) - dt) : 0.6;
+    p.writeCheck -= dt;
+    if (p.writeCheck <= 0 && p.writeT >= 10) {
+      p.writeCheck = rndRange(3, 4);
+      const chance = 0.12 + Math.min(p.writeT / 60, 1) * 0.5;
+      if (Math.random() < chance || p.writeT >= 78) this.writeInBook(game, book);
+    }
+  }
+
+  writeInBook(game, book) {
+    book.written = true;
+    book.stir = 0;
+    audio.writing();
+    this.emitEMF(2, book.x, book.y);
+    this.activity = Math.min(10, this.activity + 3);
+    game.director?.note('write', game, 'signature');
+  }
+
+  updateDotsPressure(dt, game) {
+    if (!this.data.ev.includes('dots')) return;
+    const p = this.pity;
+    // проектор в логове призрака либо близко к его траектории
+    const proj = game.world.placed.find(d => d.type === 'dots' && d.floor === this.floor &&
+      (game.world.roomAt(d.floor, d.x, d.y) === this.roomId ||
+        Math.hypot(d.x - this.x, d.y - this.y) < TILE * 4));
+    if (!proj) { p.dotsT = Math.max(0, p.dotsT - dt * 0.5); return; }
+    p.dotsT += dt;
+    const near = Math.hypot(proj.x - this.x, proj.y - this.y) < TILE * 3.2;
+    // по мере роста давления призрак тянется обратно в зону проектора, чтобы
+    // корректно установленный DOTS надёжно дал проявление (а не по прихоти RNG)
+    if (!near && p.dotsT >= 30 && (this.state === 'idle' || this.state === 'roam') &&
+      (!this.path || this.pathI >= this.path.length)) {
+      this.setPathTo(Math.floor(proj.x / TILE), Math.floor(proj.y / TILE));
+    }
+    // не мгновенно: первые ~10 c проектор лишь «прогревается», затем шанс растёт
+    if (near && this.dotsFlash <= 0 && p.dotsT >= 10) {
+      const guaranteed = p.dotsT >= 55;         // корректная установка → ~30–60 c
+      const ramp = Math.min(p.dotsT / 60, 1);
+      const chance = ramp * ramp * 0.012;       // на кадр; смещено к 30–55 c
+      if (guaranteed || Math.random() < chance) {
+        this.dotsFlash = 1.8;
+        this.dotsFrom = { x: this.x, y: this.y };
+        this.dotsVel = { x: rndRange(-40, 40), y: rndRange(-30, 30) };
+        p.dotsT = Math.max(0, p.dotsT - 20);
+      }
+    }
+  }
+
+  // ---------- Характерные действия (signature) ----------
+  canSignatureNow(game) {
+    if (game.setupPhase) {
+      // в подготовке допустимы лишь слабые характерные события и только через 30 c
+      return (game.setupDuration - game.setupTimer) > 30;
+    }
+    return true;
+  }
+
+  // характерное «подписание» призрака — помогает строить гипотезу, но не улика
+  doSignature(game, playerNear) {
+    const pl = game.player;
+    const canDanger = game.canDanger();
+    switch (this.data.key) {
+      case 'wraith': // Мираж: телепорт рядом + всплеск ЭМП; «звук не там»
+        if (canDanger && this.world.isIndoors(pl.floor, pl.x, pl.y) && Math.random() < 0.6) {
+          this.teleportNearPlayer(game); return true;
+        }
+        this.emitEMF(3); this.knockFrom(game); return true;
+      case 'phantom': // неподвижный исчезающий силуэт
+        if (canDanger && playerNear) { this.startEvent(game, 'silhouette'); return true; }
+        return this.doAmbient(game, playerNear);
+      case 'poltergeist': // серия бросков
+        this.interactProp(game); if (Math.random() < 0.5) this.interactProp(game); return true;
+      case 'banshee': // узнаваемый вой + выход показаться
+        audio.bansheeWail();
+        if (canDanger && Math.random() < 0.6) { this.startEvent(game, 'manifest'); }
+        else { this.emitEMF(2); this.knockFrom(game); }
+        return true;
+      case 'jinn': // возится со щитком / электрический сбой
+        if (this.world.breaker.on && this.tr.breakerOff && Math.random() < 0.5) this.turnOffBreaker(game);
+        else { this.interactSwitch(game); this.emitEMF(3); }
+        return true;
+      case 'mare': // гасит свет, тьма — её стихия
+        return this.killNearbyLight(game);
+      case 'revenant': // редкие тяжёлые шаги
+        audio.phantomSteps(); this.interactProp(game, { farFromPlayer: true }); return true;
+      case 'shade': // тихо действует вдали от игрока
+        return this.shadeSignature(game, playerNear);
+      case 'demon': // короткое опасное событие / ранняя охота
+        if (canDanger && game.canHunt() && Math.random() < 0.3 && this.tryStartHunt(game, true)) return true;
+        this.interactDoor(game); this.emitEMF(3); return true;
+      case 'yurei': // яростный хлопок дверью
+        this.slamDoorNearPlayer(game); return true;
+      case 'onryo': // проявление, что может перерасти в охоту
+        if (canDanger) { this.startEvent(game); return true; }
+        this.interactProp(game); return true;
+      default: // Дух: ровный «классический» паттерн
+        if (Math.random() < 0.5) this.interactDoor(game); else this.interactProp(game);
+        return true;
+    }
+  }
+
+  // фоновая активность: тихое присутствие, не выдающее улику напрямую
+  doAmbient(game, playerNear) {
+    if (this.tr.shy && playerNear) { this.knockFrom(game); return true; } // Тень рядом — лишь далёкий звук
+    const r = Math.random();
+    if (r < 0.32) { this.interactProp(game, { farFromPlayer: true, gentle: true }); return true; }
+    if (r < 0.58) { this.knockFrom(game); this.emitEMF(2); return true; }
+    if (r < 0.74) { audio.footstep(false); return true; }
+    if (r < 0.88) { audio.whisper(); return true; }
+    this.emitEMF(2); return true;
+  }
+
+  shadeSignature(game, playerNear) {
+    if (playerNear) {
+      if (Math.random() < 0.5) return false; // рядом Тень чаще просто молчит
+      this.knockFrom(game); return true;
+    }
+    const r = Math.random();
+    if (r < 0.4) { this.interactProp(game, { farFromPlayer: true, gentle: true }); return true; }
+    if (r < 0.7) { this.closeDoorBehind(game); return true; }
+    this.emitEMF(3); return true;
+  }
+
+  knockFrom(game) {
+    const pl = game.player;
+    const pan = clamp((this.x - pl.x) / (TILE * 10), -0.8, 0.8);
+    audio.knockRaps(pan);
+    game.markEventWitnessed?.('knock', { x: this.x, y: this.y, floor: this.floor });
+  }
+
+  killNearbyLight(game) {
+    const pl = game.player;
+    const room = this.world.roomById(this.world.roomAt(pl.floor, pl.x, pl.y));
+    if (room && room.lightOn && this.world.breaker.on) {
+      room.lightOn = false; audio.switchClick();
+      game.markEventWitnessed?.('lightsOut', { x: pl.x, y: pl.y, floor: pl.floor });
+    } else if (this.room.lightOn) {
+      this.room.lightOn = false; audio.switchClick();
+    } else {
+      this.interactSwitch(game);
+    }
+    this.emitEMF(2);
+    return true;
+  }
+
+  slamDoorNearPlayer(game) {
+    const pl = game.player;
+    const list = this.world.doors.filter(d => d.floor === pl.floor && !d.isFront &&
+      Math.hypot((d.tx + 0.5) * TILE - pl.x, (d.ty + 0.5) * TILE - pl.y) < TILE * 9);
+    const open = list.filter(d => d.swing > 0.6);
+    const d = (open.length ? rndPick(open) : (list.length ? rndPick(list) : null));
+    if (!d) { this.interactDoor(game); return true; }
+    d.open = false; d.targetSwing = 0;
+    audio.doorCreak(true);
+    this.emitEMF(2, (d.tx + 0.5) * TILE, (d.ty + 0.5) * TILE);
+    game.markEventWitnessed?.('doorFury', { x: (d.tx + 0.5) * TILE, y: (d.ty + 0.5) * TILE, floor: d.floor });
+    this.activity = Math.min(10, this.activity + 2);
+    return true;
+  }
+
+  // Тень тихо закрывает дверь за спиной ушедшего игрока
+  closeDoorBehind(game) {
+    const pl = game.player;
+    const doors = this.world.doors.filter(d => d.floor === pl.floor && !d.isFront && d.swing > 0.6 &&
+      Math.hypot((d.tx + 0.5) * TILE - pl.x, (d.ty + 0.5) * TILE - pl.y) < TILE * 11);
+    if (!doors.length) { this.emitEMF(2); return; }
+    const d = rndPick(doors);
+    d.open = false; d.targetSwing = 0;
+    audio.doorClose();
+    this.emitEMF(2, (d.tx + 0.5) * TILE, (d.ty + 0.5) * TILE);
+  }
+
   emitEMF(level, x = this.x, y = this.y) {
-    // шанс ЭМП-5 как улика
-    if (this.data.ev.includes('emf') && Math.random() < 0.3) level = 5;
+    // pity: после 4–6 реальных ЭМП-событий улика «ЭМП-5» гарантируется
+    if (this.data.ev.includes('emf')) {
+      const p = this.pity;
+      p.emfCount++;
+      if (p.emfCount >= p.emfNeed) {
+        level = 5; p.emfCount = 0; p.emfNeed = 4 + (Math.random() * 3 | 0);
+      } else if (Math.random() < 0.3) level = 5;
+    }
     this.world.emfEvents.push({ x, y, floor: this.floor, level, until: performance.now() / 1000 + 22 });
     this.activity = Math.min(10, this.activity + level * 0.7);
   }
 
   leavePrint(x, y) {
     if (!this.data.ev.includes('uv')) return;
-    if (Math.random() < 0.75) {
+    // pity: после 2–3 взаимодействий с дверью/выключателем отпечаток гарантирован
+    const p = this.pity;
+    p.uvCount++;
+    const guaranteed = p.uvCount >= p.uvNeed;
+    if (guaranteed || Math.random() < 0.75) {
       this.world.prints.push({ x, y, floor: this.floor, rot: rndRange(0, 6.28), t: performance.now(), seen: false });
+      if (guaranteed) { p.uvCount = 0; p.uvNeed = 2 + (Math.random() * 2 | 0); }
     }
   }
 
-  interactProp(game, { farFromPlayer = false } = {}) {
+  interactProp(game, { farFromPlayer = false, gentle = false } = {}) {
     const pl = game.player;
     const props = this.world.props.filter(p =>
       p.floor === this.floor && !p.held &&
@@ -304,12 +563,13 @@ export class Ghost {
         Math.hypot(p.x - pl.x, p.y - pl.y) > TILE * 6));
     if (!props.length) return;
     const throwOne = (p) => {
-      const power = (this.tr.throwMult || 1) * rndRange(60, 140);
+      // gentle — едва заметный сдвиг (почерк Тени вне наблюдения), без громкого броска
+      const power = gentle ? rndRange(10, 28) : (this.tr.throwMult || 1) * rndRange(60, 140);
       const a = rndRange(0, 6.28);
       p.vx = Math.cos(a) * power;
       p.vy = Math.sin(a) * power;
-      p.vz = rndRange(40, 90) * (this.tr.throwMult ? 1.4 : 1);
-      p.z = Math.max(p.z, 2);
+      p.vz = gentle ? rndRange(6, 16) : rndRange(40, 90) * (this.tr.throwMult ? 1.4 : 1);
+      p.z = Math.max(p.z, gentle ? 1 : 2);
       p.thrownAt = game.time;
       audio.propWhoosh();
     };
@@ -359,16 +619,11 @@ export class Ghost {
     this.activity = Math.min(10, this.activity + 2);
   }
 
+  // возня у книги в фазе подозрения ускоряет накопление давления записи
+  // (сама запись гарантированно появляется через updateWriting)
   tryWrite(game) {
     if (!this.data.ev.includes('writing')) return;
-    const book = this.world.placed.find(p =>
-      p.type === 'book' && !p.written && p.floor === this.floor &&
-      Math.hypot(p.x - this.x, p.y - this.y) < TILE * 6);
-    if (!book || Math.random() < 0.35) return;
-    book.written = true;
-    audio.writing();
-    this.emitEMF(2, book.x, book.y);
-    this.activity = Math.min(10, this.activity + 3);
+    this.pity.writeT += 4;
   }
 
   teleportNearPlayer(game) {
@@ -384,12 +639,13 @@ export class Ghost {
     }
   }
 
-  startEvent(game) {
+  startEvent(game, forceType = null) {
     const pl = game.player;
     // выбор типа события; у каждой сущности — свой почерк
-    let type;
+    let type = forceType;
     const sig = Math.random();
-    if (this.tr.lightsOff && sig < 0.45) type = 'lightsOut';           // Мара душит свет
+    if (type) { /* характерное действие задало тип явно */ }
+    else if (this.tr.lightsOff && sig < 0.45) type = 'lightsOut';      // Мара душит свет
     else if (this.tr.dimHunt && sig < 0.45) type = 'silhouette';       // Фантом — исчезающий силуэт
     else if (this.tr.multiThrow && sig < 0.5) type = 'propStorm';      // Полтергейст — вихрь вещей
     else if (this.tr.doorSlam && sig < 0.4) type = 'doorFury';         // Юрэй хлопает дверями
@@ -687,15 +943,30 @@ export class Ghost {
     }
   }
 
-  // миграция любимой комнаты: не чаще раза за контракт, только после охоты.
-  // Старая комната медленно прогревается, новая — остывает (через worldSim).
+  roomDist(a, b) {
+    const ca = a.rects[0], cb = b.rects[0];
+    return Math.hypot((ca.x + ca.w / 2) - (cb.x + cb.w / 2), (ca.y + ca.h / 2) - (cb.y + cb.h / 2));
+  }
+
+  // миграция любимой комнаты: не чаще раза за контракт, только после охоты
+  // и только когда игрок уже успел расследовать (см. director.canMigrate).
+  // Старая комната резко затихает и прогревается, новая — быстро остывает.
   maybeMigrate(game) {
     if (this.migrated) return;
-    const chance = game.difficulty === 'pro' ? 0.4 : 0.15;
+    if (game.director && !game.director.canMigrate(game)) return;
+    const amateur = game.difficulty !== 'pro';
+    const chance = amateur ? 0.15 : 0.4;
     if (Math.random() > chance) return;
-    const rooms = this.world.rooms.filter(r => r.key !== 'hall' && r.id !== this.roomId);
-    if (!rooms.length) return;
-    const room = rndPick(rooms);
+    const oldRoom = this.room;
+    let cand = this.world.rooms.filter(r => r.key !== 'hall' && r.id !== this.roomId);
+    if (amateur) {
+      // «Любитель»: только близкая комната того же этажа
+      cand = cand.filter(r => r.floor === oldRoom.floor)
+        .sort((a, b) => this.roomDist(a, oldRoom) - this.roomDist(b, oldRoom))
+        .slice(0, 3);
+    }
+    if (!cand.length) return;
+    const room = rndPick(cand);
     this.roomId = room.id;
     this.migrated = true;
     this.activity = Math.min(10, this.activity + 3);
@@ -707,6 +978,16 @@ export class Ghost {
       o.x = (rect.x + 0.8 + Math.random() * (rect.w - 1.6)) * TILE;
       o.y = (rect.y + 0.8 + Math.random() * (rect.h - 1.6)) * TILE;
     }
+    // ── Сигналы миграции: игрок должен понять, что зона активности сменилась
+    oldRoom.hush = 5;               // старая комната резко затихает (worldSim)
+    room.coolBoost = 8;             // новая комната быстрее остывает
+    const cx = (rect.x + rect.w / 2) * TILE, cy = (rect.y + rect.h / 2) * TILE;
+    this.emitEMF(3, cx, cy);        // всплеск ЭМП в новой комнате
+    audio.whisper();                // тихий звук «перетекания» активности
+    game.fx.lightning = Math.max(game.fx.lightning, amateur ? 0.4 : 0.18); // мигание света
+    game.log(amateur
+      ? 'Активность будто перетекла в другую комнату…'
+      : 'Что-то в доме изменилось…', 'danger');
   }
 
   smudge(game) {
@@ -797,19 +1078,6 @@ export class Ghost {
     const f = w.floors[this.floor];
     if (!f.isSolid(Math.floor(nx / TILE), Math.floor(this.y / TILE))) this.x = nx;
     if (!f.isSolid(Math.floor(this.x / TILE), Math.floor(ny / TILE))) this.y = ny;
-  }
-
-  // ---------- DOTS ----------
-  checkDots(game) {
-    if (!this.data.ev.includes('dots')) return;
-    for (const d of this.world.placed) {
-      if (d.type !== 'dots' || d.floor !== this.floor) continue;
-      if (Math.hypot(d.x - this.x, d.y - this.y) < TILE * 2.6 && Math.random() < 0.006) {
-        this.dotsFlash = 1.6;
-        this.dotsFrom = { x: this.x, y: this.y };
-        this.dotsVel = { x: rndRange(-40, 40), y: rndRange(-30, 30) };
-      }
-    }
   }
 
   // ---------- Отрисовка ----------
