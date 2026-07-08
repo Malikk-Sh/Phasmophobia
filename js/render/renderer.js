@@ -186,62 +186,84 @@ export class Renderer {
       if (st.floor !== floor) continue;
       const t = st.tiles;
       const x = t.x * TILE, y = t.y * TILE, w = t.w * TILE, h = t.h * TILE;
-      const down = st.dir === 'down';
-      // люк со стремянкой в подвал по центру плитки лестницы
-      const hw = Math.min(w - 6, TILE * 1.45);   // ширина люка
-      const hx = x + (w - hw) / 2;
-      const hy = y + 3, hh = h - 6;
-      c.save();
-
-      // обрамление люка в полу (рамка-порог)
-      c.fillStyle = '#332b1e';
-      c.fillRect(hx - 6, hy - 6, hw + 12, hh + 12);
-      c.strokeStyle = 'rgba(0,0,0,.5)'; c.lineWidth = 1.5;
-      c.strokeRect(hx - 6 + 1, hy - 6 + 1, hw + 10, hh + 10);
-      c.fillStyle = '#1b160f';
-      c.fillRect(hx - 3, hy - 3, hw + 6, hh + 6);
-
-      // тёмная шахта: у спуска чернеет книзу, у подъёма — прохладный свет сверху
-      const shaft = c.createLinearGradient(0, hy, 0, hy + hh);
-      if (down) { shaft.addColorStop(0, '#0d0d11'); shaft.addColorStop(1, '#000'); }
-      else { shaft.addColorStop(0, '#1a2027'); shaft.addColorStop(1, '#050506'); }
-      c.fillStyle = shaft;
-      c.fillRect(hx, hy, hw, hh);
-      // у подъёма — блик света из проёма верхнего этажа
-      if (!down) {
-        const gl = c.createLinearGradient(0, hy, 0, hy + hh * 0.5);
-        gl.addColorStop(0, 'rgba(150,175,205,.25)');
-        gl.addColorStop(1, 'rgba(150,175,205,0)');
-        c.fillStyle = gl;
-        c.fillRect(hx, hy, hw, hh * 0.5);
-      }
-
-      // две вертикальные тетивы стремянки
-      const railW = 3.6;
-      const railL = hx + 5, railR = hx + hw - 5 - railW;
-      for (const rx of [railL, railR]) {
-        c.fillStyle = '#7f858b';
-        c.fillRect(rx, hy + 2, railW, hh - 4);
-        c.fillStyle = 'rgba(255,255,255,.20)';   // блик слева на тетиве
-        c.fillRect(rx, hy + 2, 1, hh - 4);
-        c.fillStyle = 'rgba(0,0,0,.35)';         // тень справа
-        c.fillRect(rx + railW - 1, hy + 2, 1, hh - 4);
-      }
-
-      // горизонтальные перекладины (ступени стремянки)
-      const rungs = Math.max(5, Math.round(hh / 12));
-      const rx0 = railL + railW - 0.5, rx1 = railR + 0.5;
-      for (let i = 1; i < rungs; i++) {
-        const ry = hy + hh * (i / rungs);
-        c.fillStyle = 'rgba(0,0,0,.55)';         // тень под перекладиной
-        c.fillRect(rx0, ry + 1.6, rx1 - rx0, 2.6);
-        c.fillStyle = '#9aa0a6';                 // металл перекладины
-        c.fillRect(rx0, ry, rx1 - rx0, 2.6);
-        c.fillStyle = 'rgba(255,255,255,.22)';   // блик сверху
-        c.fillRect(rx0, ry, rx1 - rx0, 0.9);
-      }
-      c.restore();
+      const cx = x + w / 2;
+      if (st.dir === 'down') this.drawHatchDown(c, cx, y, h);
+      else this.drawLadderUp(c, cx, y, h);
     }
+  }
+
+  // Спуск в подвал: компактный люк в полу со стремянкой, уходящей в темноту.
+  drawHatchDown(c, cx, y, h) {
+    const hw = TILE * 0.95, hh = TILE * 1.55;   // небольшой люк ~1 тайл
+    const hx = cx - hw / 2, hy = y + (h - hh) / 2;
+    c.save();
+    // рамка-порог люка в полу
+    c.fillStyle = '#332b1e';
+    c.fillRect(hx - 5, hy - 5, hw + 10, hh + 10);
+    c.strokeStyle = 'rgba(0,0,0,.5)'; c.lineWidth = 1.5;
+    c.strokeRect(hx - 4, hy - 4, hw + 8, hh + 8);
+    c.fillStyle = '#15110a';
+    c.fillRect(hx - 2, hy - 2, hw + 4, hh + 4);
+    // шахта, чернеющая книзу
+    const shaft = c.createLinearGradient(0, hy, 0, hy + hh);
+    shaft.addColorStop(0, '#0d0d11'); shaft.addColorStop(1, '#000');
+    c.fillStyle = shaft;
+    c.fillRect(hx, hy, hw, hh);
+    // тетивы и перекладины стремянки
+    const railW = 3, railL = hx + 3, railR = hx + hw - 3 - railW;
+    for (const rx of [railL, railR]) {
+      c.fillStyle = '#7f858b';
+      c.fillRect(rx, hy + 2, railW, hh - 4);
+      c.fillStyle = 'rgba(255,255,255,.2)';
+      c.fillRect(rx, hy + 2, 1, hh - 4);
+    }
+    const rungs = Math.max(4, Math.round(hh / 11));
+    const rx0 = railL + railW - 0.5, rx1 = railR + 0.5;
+    for (let i = 1; i < rungs; i++) {
+      const ry = hy + hh * (i / rungs);
+      c.fillStyle = 'rgba(0,0,0,.55)'; c.fillRect(rx0, ry + 1.4, rx1 - rx0, 2.4);
+      c.fillStyle = '#9aa0a6'; c.fillRect(rx0, ry, rx1 - rx0, 2.4);
+      c.fillStyle = 'rgba(255,255,255,.22)'; c.fillRect(rx0, ry, rx1 - rx0, 0.8);
+    }
+    c.restore();
+  }
+
+  // Подъём наверх: просто приставная деревянная лестница (без люка),
+  // со светом из проёма верхнего этажа сверху.
+  drawLadderUp(c, cx, y, h) {
+    const lw = TILE * 0.9, ly = y + 5, ll = h - 10;
+    const lx = cx - lw / 2;
+    c.save();
+    // блик света из проёма наверху
+    const gl = c.createLinearGradient(0, y - 2, 0, y + ll * 0.6);
+    gl.addColorStop(0, 'rgba(160,182,212,.3)');
+    gl.addColorStop(1, 'rgba(160,182,212,0)');
+    c.fillStyle = gl;
+    c.fillRect(lx - 7, y - 3, lw + 14, ll * 0.7);
+    // мягкая тень на полу под лестницей
+    c.fillStyle = 'rgba(0,0,0,.28)';
+    c.fillRect(lx - 1, ly + 2, lw + 4, ll);
+    // две деревянные тетивы
+    const railW = 3.4, railL = lx, railR = lx + lw - railW;
+    for (const rx of [railL, railR]) {
+      const g = c.createLinearGradient(rx, 0, rx + railW, 0);
+      g.addColorStop(0, '#7a5a34'); g.addColorStop(1, '#573d21');
+      c.fillStyle = g;
+      c.fillRect(rx, ly, railW, ll);
+      c.fillStyle = 'rgba(255,236,200,.18)';
+      c.fillRect(rx, ly, 1, ll);
+    }
+    // перекладины
+    const rungs = Math.max(5, Math.round(ll / 12));
+    const rx0 = railL + railW - 0.5, rx1 = railR + 0.5;
+    for (let i = 0; i <= rungs; i++) {
+      const ry = ly + ll * (i / rungs);
+      if (ry < ly + 0.5 || ry > ly + ll - 0.5) continue;
+      c.fillStyle = 'rgba(0,0,0,.4)'; c.fillRect(rx0, ry + 1.4, rx1 - rx0, 2.6);
+      c.fillStyle = '#8a6a40'; c.fillRect(rx0, ry, rx1 - rx0, 2.6);
+      c.fillStyle = 'rgba(255,236,200,.22)'; c.fillRect(rx0, ry, rx1 - rx0, 0.9);
+    }
+    c.restore();
   }
 
   // деревянные пороги в дверных проёмах
