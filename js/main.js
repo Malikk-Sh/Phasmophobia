@@ -343,6 +343,18 @@ const game = {
       const d2 = (br.x - pl.x) ** 2 + (br.y - pl.y) ** 2;
       if (d2 < R * R) consider(d2, { kind: 'breaker', label: br.on ? 'ЩИТОК ВЫКЛ' : 'ЩИТОК ВКЛ' });
     }
+    // лестницы: подняться/спуститься по кнопке действия
+    for (const st of this.world.stairs) {
+      if (st.floor !== pl.floor) continue;
+      const t = st.tiles;
+      // ближайшая точка прямоугольника ступеней к игроку
+      const cx = clamp(pl.x, t.x * TILE, (t.x + t.w) * TILE);
+      const cy = clamp(pl.y, t.y * TILE, (t.y + t.h) * TILE);
+      const d2 = (cx - pl.x) ** 2 + (cy - pl.y) ** 2;
+      if (d2 < (TILE * 1.1) ** 2) {
+        consider(d2, { kind: 'stairs', stairs: st, label: st.dir === 'down' ? 'СПУСТИТЬСЯ' : 'ПОДНЯТЬСЯ' });
+      }
+    }
     // проклятый предмет
     const cu = this.world.cursed;
     if (cu && !cu.used && cu.floor === pl.floor) {
@@ -407,6 +419,13 @@ const game = {
         const br = this.world.breaker;
         br.on = !br.on;
         br.on ? audio.breakerOn() : audio.breakerOff();
+        break;
+      }
+      case 'stairs': {
+        this.changeFloor(pl, act.stairs.target);
+        pl.stairsCooldown = 0.6;
+        audio.footstep(false);
+        setTimeout(() => pl.alive && audio.footstep(false), 220);
         break;
       }
       case 'hide': {

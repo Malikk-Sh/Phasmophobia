@@ -125,6 +125,7 @@ export class Renderer {
     // пороги, плинтусы и детали интерьера
     this.paintThresholds(c, 0);
     this.paintDetails(c, 0, rng);
+    this.paintStairs(c, 0);
 
     // кусты
     for (const b of this.world.exterior.bushes) {
@@ -173,8 +174,68 @@ export class Renderer {
     c.beginPath(); c.moveTo(16.2 * TILE, 3.7 * TILE); c.lineTo(26.6 * TILE, 3.7 * TILE); c.stroke();
     this.paintThresholds(c, FLOOR_BASEMENT);
     this.paintDetails(c, FLOOR_BASEMENT, rng);
+    this.paintStairs(c, FLOOR_BASEMENT);
     for (const f of this.world.furniture[FLOOR_BASEMENT]) drawFurnitureItem(c, f);
     return cv;
+  }
+
+  // Лестница между этажами: читаемый top-down пролёт со ступенями,
+  // косоурами, указателем направления и предупредительной кромкой у входа.
+  paintStairs(c, floor) {
+    for (const st of this.world.stairs) {
+      if (st.floor !== floor) continue;
+      const t = st.tiles;
+      const x = t.x * TILE, y = t.y * TILE, w = t.w * TILE, h = t.h * TILE;
+      const down = st.dir === 'down';
+      c.save();
+      // тёмная ниша проёма
+      c.fillStyle = '#0c0b09';
+      c.fillRect(x - 3, y - 3, w + 6, h + 6);
+      // боковые косоуры/перила и верх-низ обрамления
+      c.fillStyle = '#2c2418';
+      c.fillRect(x - 3, y - 3, 4, h + 6);
+      c.fillRect(x + w - 1, y - 3, 4, h + 6);
+      c.fillStyle = '#241d13';
+      c.fillRect(x - 3, y - 3, w + 6, 4);
+      c.fillRect(x - 3, y + h - 1, w + 6, 4);
+
+      // ступени: чем глубже, тем темнее (для «down» — вглубь к дальнему краю)
+      const n = 7;
+      for (let i = 0; i < n; i++) {
+        const f = i / (n - 1);
+        const depth = down ? f : 1 - f;         // 0 = ближе к «выходу»
+        const sy = y + (h - 2) * (i / n) + 1;
+        const sh = (h - 2) / n - 1.5;
+        const lum = Math.round(58 - depth * 42); // 58..16
+        c.fillStyle = `rgb(${lum + 6},${lum + 2},${lum - 4})`;
+        c.fillRect(x + 1, sy, w - 2, sh);
+        c.fillStyle = `rgba(255,238,205,${0.18 - depth * 0.12})`; // светлая кромка ступени
+        c.fillRect(x + 1, sy, w - 2, 1.4);
+        c.fillStyle = 'rgba(0,0,0,.5)';                          // тень подступёнка
+        c.fillRect(x + 1, sy + sh, w - 2, 1.6);
+      }
+      // общий градиент глубины
+      const g = down
+        ? c.createLinearGradient(0, y, 0, y + h)
+        : c.createLinearGradient(0, y + h, 0, y);
+      g.addColorStop(0, 'rgba(0,0,0,0)');
+      g.addColorStop(1, 'rgba(0,0,0,.72)');
+      c.fillStyle = g;
+      c.fillRect(x, y, w, h);
+
+      // указатель направления ▼/▲
+      c.fillStyle = 'rgba(232,214,168,.55)';
+      c.font = `bold ${Math.round(TILE * 0.85)}px sans-serif`;
+      c.textAlign = 'center'; c.textBaseline = 'middle';
+      c.fillText(down ? '▼' : '▲', x + w / 2, y + h / 2);
+
+      // предупредительная жёлто-чёрная кромка у входа на ступени (южный край)
+      for (let sx = x; sx < x + w; sx += 8) {
+        c.fillStyle = ((sx / 8) | 0) % 2 ? '#c8a12a' : '#1a1712';
+        c.fillRect(sx, y + h - 3, 8, 3);
+      }
+      c.restore();
+    }
   }
 
   // деревянные пороги в дверных проёмах

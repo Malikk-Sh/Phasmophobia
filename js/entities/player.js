@@ -69,19 +69,7 @@ export class Player {
       }
     } else this.walkPhase = 0;
 
-    // лестницы
-    if (this.stairsCooldown <= 0) {
-      for (const st of this.world.stairs) {
-        if (st.floor !== this.floor) continue;
-        const tx = Math.floor(this.x / TILE), ty = Math.floor(this.y / TILE);
-        const tr = st.trigger;
-        if (tx >= tr.x && tx < tr.x + tr.w && ty >= tr.y && ty < tr.y + tr.h) {
-          game.changeFloor(this, st.target);
-          this.stairsCooldown = 1.2;
-          break;
-        }
-      }
-    }
+    // переход между этажами теперь по кнопке действия (см. main.findInteraction)
 
     // дыхание на холоде
     const room = this.world.roomById(this.world.roomAt(this.floor, this.x, this.y));
