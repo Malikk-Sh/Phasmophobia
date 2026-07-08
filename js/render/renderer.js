@@ -187,52 +187,58 @@ export class Renderer {
       const t = st.tiles;
       const x = t.x * TILE, y = t.y * TILE, w = t.w * TILE, h = t.h * TILE;
       const down = st.dir === 'down';
+      // люк со стремянкой в подвал по центру плитки лестницы
+      const hw = Math.min(w - 6, TILE * 1.45);   // ширина люка
+      const hx = x + (w - hw) / 2;
+      const hy = y + 3, hh = h - 6;
       c.save();
-      // тёмная ниша проёма
-      c.fillStyle = '#0c0b09';
-      c.fillRect(x - 3, y - 3, w + 6, h + 6);
-      // боковые косоуры/перила и верх-низ обрамления
-      c.fillStyle = '#2c2418';
-      c.fillRect(x - 3, y - 3, 4, h + 6);
-      c.fillRect(x + w - 1, y - 3, 4, h + 6);
-      c.fillStyle = '#241d13';
-      c.fillRect(x - 3, y - 3, w + 6, 4);
-      c.fillRect(x - 3, y + h - 1, w + 6, 4);
 
-      // ступени: чем глубже, тем темнее (для «down» — вглубь к дальнему краю)
-      const n = 7;
-      for (let i = 0; i < n; i++) {
-        const f = i / (n - 1);
-        const depth = down ? f : 1 - f;         // 0 = ближе к «выходу»
-        const sy = y + (h - 2) * (i / n) + 1;
-        const sh = (h - 2) / n - 1.5;
-        const lum = Math.round(58 - depth * 42); // 58..16
-        c.fillStyle = `rgb(${lum + 6},${lum + 2},${lum - 4})`;
-        c.fillRect(x + 1, sy, w - 2, sh);
-        c.fillStyle = `rgba(255,238,205,${0.18 - depth * 0.12})`; // светлая кромка ступени
-        c.fillRect(x + 1, sy, w - 2, 1.4);
-        c.fillStyle = 'rgba(0,0,0,.5)';                          // тень подступёнка
-        c.fillRect(x + 1, sy + sh, w - 2, 1.6);
+      // обрамление люка в полу (рамка-порог)
+      c.fillStyle = '#332b1e';
+      c.fillRect(hx - 6, hy - 6, hw + 12, hh + 12);
+      c.strokeStyle = 'rgba(0,0,0,.5)'; c.lineWidth = 1.5;
+      c.strokeRect(hx - 6 + 1, hy - 6 + 1, hw + 10, hh + 10);
+      c.fillStyle = '#1b160f';
+      c.fillRect(hx - 3, hy - 3, hw + 6, hh + 6);
+
+      // тёмная шахта: у спуска чернеет книзу, у подъёма — прохладный свет сверху
+      const shaft = c.createLinearGradient(0, hy, 0, hy + hh);
+      if (down) { shaft.addColorStop(0, '#0d0d11'); shaft.addColorStop(1, '#000'); }
+      else { shaft.addColorStop(0, '#1a2027'); shaft.addColorStop(1, '#050506'); }
+      c.fillStyle = shaft;
+      c.fillRect(hx, hy, hw, hh);
+      // у подъёма — блик света из проёма верхнего этажа
+      if (!down) {
+        const gl = c.createLinearGradient(0, hy, 0, hy + hh * 0.5);
+        gl.addColorStop(0, 'rgba(150,175,205,.25)');
+        gl.addColorStop(1, 'rgba(150,175,205,0)');
+        c.fillStyle = gl;
+        c.fillRect(hx, hy, hw, hh * 0.5);
       }
-      // общий градиент глубины
-      const g = down
-        ? c.createLinearGradient(0, y, 0, y + h)
-        : c.createLinearGradient(0, y + h, 0, y);
-      g.addColorStop(0, 'rgba(0,0,0,0)');
-      g.addColorStop(1, 'rgba(0,0,0,.72)');
-      c.fillStyle = g;
-      c.fillRect(x, y, w, h);
 
-      // указатель направления ▼/▲
-      c.fillStyle = 'rgba(232,214,168,.55)';
-      c.font = `bold ${Math.round(TILE * 0.85)}px sans-serif`;
-      c.textAlign = 'center'; c.textBaseline = 'middle';
-      c.fillText(down ? '▼' : '▲', x + w / 2, y + h / 2);
+      // две вертикальные тетивы стремянки
+      const railW = 3.6;
+      const railL = hx + 5, railR = hx + hw - 5 - railW;
+      for (const rx of [railL, railR]) {
+        c.fillStyle = '#7f858b';
+        c.fillRect(rx, hy + 2, railW, hh - 4);
+        c.fillStyle = 'rgba(255,255,255,.20)';   // блик слева на тетиве
+        c.fillRect(rx, hy + 2, 1, hh - 4);
+        c.fillStyle = 'rgba(0,0,0,.35)';         // тень справа
+        c.fillRect(rx + railW - 1, hy + 2, 1, hh - 4);
+      }
 
-      // предупредительная жёлто-чёрная кромка у входа на ступени (южный край)
-      for (let sx = x; sx < x + w; sx += 8) {
-        c.fillStyle = ((sx / 8) | 0) % 2 ? '#c8a12a' : '#1a1712';
-        c.fillRect(sx, y + h - 3, 8, 3);
+      // горизонтальные перекладины (ступени стремянки)
+      const rungs = Math.max(5, Math.round(hh / 12));
+      const rx0 = railL + railW - 0.5, rx1 = railR + 0.5;
+      for (let i = 1; i < rungs; i++) {
+        const ry = hy + hh * (i / rungs);
+        c.fillStyle = 'rgba(0,0,0,.55)';         // тень под перекладиной
+        c.fillRect(rx0, ry + 1.6, rx1 - rx0, 2.6);
+        c.fillStyle = '#9aa0a6';                 // металл перекладины
+        c.fillRect(rx0, ry, rx1 - rx0, 2.6);
+        c.fillStyle = 'rgba(255,255,255,.22)';   // блик сверху
+        c.fillRect(rx0, ry, rx1 - rx0, 0.9);
       }
       c.restore();
     }
