@@ -76,8 +76,11 @@ const game = {
     this.rng = makeRng(this.contractSeed);
     setRng(this.rng); // игровая логика контракта — на сидированном ГСЧ
     this.hintCooldown = 0;
-    // карта контракта: выбор по сид-RNG (setRng уже активен) — партия воспроизводима
-    const blueprint = rndPick(MAPS);
+    // карта контракта: выбор по сид-RNG (setRng уже активен) — партия воспроизводима.
+    // debug-хук: localStorage['phasmo-map']=id принудительно выбирает карту.
+    let forced = null;
+    try { forced = localStorage.getItem('phasmo-map'); } catch { /* приватный режим */ }
+    const blueprint = (forced && MAPS.find(m => m.id === forced)) || rndPick(MAPS);
     this.blueprint = blueprint;
     this.world = buildWorld(blueprint);
     furnish(this.world, blueprint);
