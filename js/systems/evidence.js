@@ -103,7 +103,7 @@ export const worldSim = {
             p.vz = -p.vz * 0.3;
             if (game.player.floor === p.floor &&
               Math.hypot(p.x - game.player.x, p.y - game.player.y) < TILE * 12) {
-              audio.propImpact(p.type === 'plate' || p.type === 'cup' || p.type === 'bottle');
+              audio.propImpact(p.type === 'plate' || p.type === 'cup' || p.type === 'bottle', audio.panFor(p.x));
             }
             if (p.type === 'plate' && Math.abs(p.vz) > 40) p.broken = true;
             game.fx.dustBurst(p.x, p.y, p.floor);

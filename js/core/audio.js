@@ -18,6 +18,10 @@ let windSrc, windGain, windFilter;
 let spiritSrc, spiritGain;
 let rainGain = null;
 
+// шины: эмбиент (приглушается под охотой) и одноразовые звуки с реверб-посылом
+let ambientBus = null, busInput = null, convolver = null, reverbSend = null;
+const PAN_SPREAD = 320; // ~10 тайлов: на этой дистанции звук уходит в край стерео
+
 // таймеры
 const T = { heart: 0, emf: 0, ghostStep: 0, creak: 8, crackle: 0, whis: 20 };
 
@@ -46,7 +50,7 @@ function playSample(key, { gain = 1, pan = 0, rate = 1, loop = false } = {}) {
   g.gain.value = gain;
   const p = ctx.createStereoPanner();
   p.pan.value = pan;
-  src.connect(g).connect(p).connect(master);
+  src.connect(g).connect(p).connect(loop ? (ambientBus || master) : (busInput || master));
   src.start();
   return { src, gain: g, pan: p };
 }
@@ -88,6 +92,18 @@ async function loadAudioAssets() {
   }
 }
 
+// импульсный отклик для реверба: затухающий стереошум
+function makeImpulse(seconds = 2.2, decay = 2.6) {
+  const rate = ctx.sampleRate;
+  const len = Math.max(1, Math.floor(seconds * rate));
+  const buf = ctx.createBuffer(2, len, rate);
+  for (let ch = 0; ch < 2; ch++) {
+    const d = buf.getChannelData(ch);
+    for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, decay);
+  }
+  return buf;
+}
+
 function makeNoiseBuffer() {
   const len = ctx.sampleRate * 2;
   const buf = ctx.createBuffer(1, len, ctx.sampleRate);
@@ -115,7 +131,7 @@ function noise({ dur = 0.2, type = 'lowpass', freq = 800, q = 1, gain = 0.3, pan
   g.gain.exponentialRampToValueAtTime(0.0001, now() + dur);
   const p = ctx.createStereoPanner();
   p.pan.value = pan;
-  src.connect(f).connect(g).connect(p).connect(master);
+  src.connect(f).connect(g).connect(p).connect(busInput || master);
   src.start();
   src.stop(now() + dur + 0.05);
 }
@@ -138,7 +154,7 @@ function tone({ type = 'sine', freq = 440, dur = 0.2, gain = 0.2, slide = null, 
     l.connect(lg).connect(o.frequency);
     l.start(); l.stop(now() + dur);
   }
-  o.connect(g).connect(p).connect(master);
+  o.connect(g).connect(p).connect(busInput || master);
   o.start();
   o.stop(now() + dur + 0.05);
 }
@@ -157,6 +173,13 @@ export const audio = {
     master = ctx.createGain();
     master.gain.value = 0.9;
     master.connect(comp).connect(ctx.destination);
+    // шина эмбиента: беды дрона/ветра/дождя (приглушается под охотой)
+    ambientBus = ctx.createGain(); ambientBus.gain.value = 1; ambientBus.connect(master);
+    // шина одноразовых звуков с параллельным реверб-посылом (пространство дома)
+    busInput = ctx.createGain(); busInput.connect(master);
+    convolver = ctx.createConvolver(); convolver.buffer = makeImpulse();
+    reverbSend = ctx.createGain(); reverbSend.gain.value = 0.12;
+    busInput.connect(reverbSend); reverbSend.connect(convolver); convolver.connect(master);
     this.ready = true;
     loadAudioAssets().then(() => { if (this.ready) this.startSampleAmbience(); });
     this.startAmbient();
@@ -171,14 +194,14 @@ export const audio = {
     droneOsc2 = ctx.createOscillator(); droneOsc2.type = 'sine'; droneOsc2.frequency.value = 46.7;
     droneGain = ctx.createGain(); droneGain.gain.value = 0.0;
     droneOsc1.connect(droneGain); droneOsc2.connect(droneGain);
-    droneGain.connect(master);
+    droneGain.connect(ambientBus);
     droneOsc1.start(); droneOsc2.start();
     // ветер
     windSrc = ctx.createBufferSource(); windSrc.buffer = noiseBuf; windSrc.loop = true;
     windFilter = ctx.createBiquadFilter(); windFilter.type = 'bandpass';
     windFilter.frequency.value = 320; windFilter.Q.value = 0.6;
     windGain = ctx.createGain(); windGain.gain.value = 0.0;
-    windSrc.connect(windFilter).connect(windGain).connect(master);
+    windSrc.connect(windFilter).connect(windGain).connect(ambientBus);
     windSrc.start();
     // LFO порывов
     const lfo = ctx.createOscillator(); lfo.frequency.value = 0.07;
@@ -190,7 +213,7 @@ export const audio = {
     spiritSrc.playbackRate.value = 1.7;
     const sf = ctx.createBiquadFilter(); sf.type = 'bandpass'; sf.frequency.value = 1400; sf.Q.value = 0.8;
     spiritGain = ctx.createGain(); spiritGain.gain.value = 0;
-    spiritSrc.connect(sf).connect(spiritGain).connect(master);
+    spiritSrc.connect(sf).connect(spiritGain).connect(ambientBus);
     spiritSrc.start();
     // дождь: мягкий широкополосный шум
     const rainSrc = ctx.createBufferSource(); rainSrc.buffer = noiseBuf; rainSrc.loop = true;
@@ -198,7 +221,7 @@ export const audio = {
     const rf = ctx.createBiquadFilter(); rf.type = 'highpass'; rf.frequency.value = 1500;
     const rf2 = ctx.createBiquadFilter(); rf2.type = 'lowpass'; rf2.frequency.value = 6500;
     rainGain = ctx.createGain(); rainGain.gain.value = 0;
-    rainSrc.connect(rf).connect(rf2).connect(rainGain).connect(master);
+    rainSrc.connect(rf).connect(rf2).connect(rainGain).connect(ambientBus);
     rainSrc.start();
   },
 
@@ -228,11 +251,21 @@ export const audio = {
       sampleAmbience.rain?.gain.gain.linearRampToValueAtTime((indoors ? (basement ? 0 : 0.08) : 0.32) * RAIN_VOL, t + 1.2);
       sampleAmbience.wind?.gain.gain.linearRampToValueAtTime(indoors ? 0.04 : 0.22, t + 1.2);
     }
+    // реверб: гулкий подвал > комнаты дома > почти сухо на улице
+    reverbSend?.gain.setTargetAtTime(indoors ? (basement ? 0.26 : 0.14) : 0.04, t, 0.6);
   },
+
+  // позиция слушателя (игрока) — для панорамы позиционных звуков
+  listener: { x: 0, y: 0, floor: 0 },
+  setListener(x, y, floor) { this.listener.x = x; this.listener.y = y; this.listener.floor = floor; },
+  // панорама источника по горизонтальному смещению от слушателя (мир=экран, север сверху)
+  panFor(x) { return Math.max(-0.85, Math.min(0.85, (x - this.listener.x) / PAN_SPREAD)); },
 
   // ---------- Кадровое обновление ----------
   update(dt, s) {
     if (!this.ready) return;
+    // ducking: под охотой приглушаем фоновый бед, чтобы кульминация «пробивала»
+    if (ambientBus) ambientBus.gain.setTargetAtTime(s.hunt ? 0.42 : 1, now(), 0.35);
     // сердцебиение
     if (s.heartbeat > 0.02) {
       T.heart -= dt;
@@ -281,9 +314,11 @@ export const audio = {
       T.ghostStep -= dt;
       if (T.ghostStep <= 0) {
         T.ghostStep = s.ghostStepInt || 0.55;
-        if (!playSample('ghost.step', { gain: 0.45 * s.huntNear, rate: sampleGain(1, 0.08) })) {
-          noise({ dur: 0.16, type: 'lowpass', freq: 130, gain: 0.16 * s.huntNear, rate: 0.5 });
-          tone({ type: 'sine', freq: 40, dur: 0.15, gain: 0.22 * s.huntNear, slide: 28 });
+        // шаги идут из реальной стороны, где призрак
+        const gp = (s.ghostX != null && s.ghostFloor === this.listener.floor) ? this.panFor(s.ghostX) : 0;
+        if (!playSample('ghost.step', { gain: 0.45 * s.huntNear, pan: gp, rate: sampleGain(1, 0.08) })) {
+          noise({ dur: 0.16, type: 'lowpass', freq: 130, gain: 0.16 * s.huntNear, rate: 0.5, pan: gp });
+          tone({ type: 'sine', freq: 40, dur: 0.15, gain: 0.22 * s.huntNear, slide: 28, pan: gp });
         }
       }
     }
@@ -491,11 +526,11 @@ export const audio = {
     if (playSample('prop.whoosh', { gain: 0.45, rate: sampleGain(1, 0.1) })) return;
     noise({ dur: 0.25, type: 'bandpass', freq: 900, freqEnd: 300, q: 1.5, gain: 0.1 });
   },
-  propImpact(hard = true) {
+  propImpact(hard = true, pan = 0) {
     if (!this.ready) return;
-    if (playSample(hard ? 'prop.impact.hard' : 'prop.impact.soft', { gain: hard ? 0.55 : 0.45, rate: sampleGain(1, 0.12) })) return;
-    noise({ dur: 0.12, freq: hard ? 2400 : 500, type: hard ? 'highpass' : 'lowpass', gain: 0.18 });
-    tone({ type: 'triangle', freq: hard ? 320 : 120, slide: 60, dur: 0.12, gain: 0.1 });
+    if (playSample(hard ? 'prop.impact.hard' : 'prop.impact.soft', { gain: hard ? 0.55 : 0.45, pan, rate: sampleGain(1, 0.12) })) return;
+    noise({ dur: 0.12, freq: hard ? 2400 : 500, type: hard ? 'highpass' : 'lowpass', gain: 0.18, pan });
+    tone({ type: 'triangle', freq: hard ? 320 : 120, slide: 60, dur: 0.12, gain: 0.1, pan });
   },
 
   writing() {

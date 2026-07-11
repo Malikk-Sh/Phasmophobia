@@ -167,6 +167,18 @@ export class FX {
     ctx.fillRect(0, 0, w, h);
     ctx.globalCompositeOperation = 'source-over';
 
+    // красный пульс охоты: цветной свет-акцент, тем сильнее, чем ближе призрак
+    const gh = game.ghost;
+    if (gh && gh.state === 'hunt' && gh.floor === pl.floor) {
+      const d = Math.hypot(gh.x - pl.x, gh.y - pl.y);
+      const near = clamp(1 - d / 420, 0, 1); // ~13 тайлов
+      if (near > 0.01) {
+        const pulse = 0.7 + Math.sin(game.time * 8) * 0.3;
+        ctx.fillStyle = `rgba(120,6,6,${(0.05 + near * 0.16) * pulse})`;
+        ctx.fillRect(0, 0, w, h);
+      }
+    }
+
     // молния: холодная заливка экрана (в доме — слабее, сквозь окна)
     if (this.lightning > 0.02) {
       const k = outdoors ? 0.3 : 0.08;

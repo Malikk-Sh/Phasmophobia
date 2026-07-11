@@ -484,8 +484,8 @@ const game = {
     } else { // кукла
       cu.used = true;
       pl.drainSanity(10);
-      audio.knockRaps(0);
       gh.teleportNearPlayer(this);
+      audio.knockRaps(audio.panFor(gh.x));
       gh.activity = Math.min(10, gh.activity + 5);
       this.log('Кукла повернула голову. Оно рядом.', 'danger');
     }
@@ -655,8 +655,11 @@ const game = {
       const kinds = room && ROOM_FX[room.key];
       if (kinds && pl.alive) {
         const kind = rndPick(kinds);
-        if (kind === 'tv') { this.tvStaticT = 1.15; audio.roomTone('tv', 0); }
-        else audio.roomTone(kind, rndRange(-0.5, 0.5));
+        // «голос» комнаты звучит из её стороны (панорама по центру комнаты)
+        const rc = room.rects[0];
+        const pan = audio.panFor((rc.x + rc.w / 2) * TILE);
+        if (kind === 'tv') { this.tvStaticT = 1.15; audio.roomTone('tv', pan); }
+        else audio.roomTone(kind, pan);
         if (Math.random() < 0.3) pl.drainSanity(0.5);
       }
     }
@@ -678,9 +681,13 @@ const game = {
       huntNear = clamp(1 - d / (TILE * 12), 0, 1);
       heartbeat = clamp(1 - d / (TILE * 14), 0.3, 1);
     } else if (pl.sanity < 25) heartbeat = 0.25;
+    // позиция слушателя для панорамы позиционных звуков
+    audio.setListener(pl.x, pl.y, pl.floor);
     audio.update(dt, {
       heartbeat,
       huntNear,
+      hunt: gh.state === 'hunt',
+      ghostX: gh.x, ghostFloor: gh.floor, // шаги охоты идут из реальной стороны
       // темп шагов призрака: в погоне — частые, у Ревенанта вне погони — редкие тяжёлые
       ghostStepInt: gh.huntPhase === 'chase' ? 0.34
         : (gh.tr.slowSpeed !== undefined ? 1.05 : 0.58),

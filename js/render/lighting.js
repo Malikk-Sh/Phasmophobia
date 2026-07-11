@@ -135,8 +135,10 @@ export class Lighting {
         this.punch((w.tx + 0.5) * TILE, (w.ty + 0.5) * TILE,
           TILE * (1.9 + bolt * 1.6), 0.16 + bolt * 0.55);
       }
-      // свет крыльца
-      this.punch(9.2 * TILE, 14.4 * TILE, TILE * 2.6, (0.45 + Math.sin(game.time * 13) * 0.06) * fl);
+      // свет крыльца (по данным карты)
+      const P = world.porch;
+      this.punch((P.x + P.w / 2) * TILE, (P.y + P.h / 2) * TILE, TILE * 2.6,
+        (0.45 + Math.sin(game.time * 13) * 0.06) * fl);
       // фургон светится изнутри
       this.punch(world.van.x + world.van.w / 2, world.van.y + world.van.h - TILE * 0.6, TILE * 2.4, 0.5);
     }
