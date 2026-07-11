@@ -5,7 +5,8 @@ import { TILE } from '../core/utils.js';
 import { FLOOR_BASEMENT } from './house.js';
 
 // ---------- Расстановка ----------
-export function furnish(world) {
+export function furnish(world, blueprint) {
+  const bp = blueprint;
   const F = { 0: [], [FLOOR_BASEMENT]: [] };
   const colliders = { 0: [], [FLOOR_BASEMENT]: [] };
   const tallOccluders = { 0: [], [FLOOR_BASEMENT]: [] };
@@ -47,141 +48,24 @@ export function furnish(world) {
     });
   }
 
-  // ===== Гараж ===== (двери: гараж→коридор в тайле x14 — держим проём свободным)
-  place('car', 0, 11.4, 8.0, 2.5, 3.6);
-  place('workbench', 0, 16.4, 6.15, 2.4, 0.85);
-  place('shelfTall', 0, 11.15, 10.2, 0.75, 2.4, { tall: true });
-  place('locker', 0, 18.05, 8.3, 0.9, 1.7, { tall: true, hide: true, name: 'Шкафчик' });
-  place('tires', 0, 16.9, 11.8, 1.0, 1.0);
-  prop('bottle', 0, 17.2, 7.6);
-  prop('tool', 0, 12.1, 12.4);
+  // ===== Мебель и пропсы из чертежа =====
+  for (const [type, floor, tx, ty, tw, th, opts] of bp.furniture) {
+    place(type, floor, tx, ty, tw, th, opts || {});
+  }
+  for (const [type, floor, tx, ty] of bp.props) prop(type, floor, tx, ty);
 
-  // ===== Прачечная =====
-  place('washer', 0, 20.15, 6.1, 1.0, 1.05);
-  place('dryer', 0, 20.15, 7.3, 1.0, 1.05);
-  place('waterheater', 0, 20.1, 11.3, 0.95, 1.3, { tall: true });
-  place('basket', 0, 21.6, 8.6, 0.8, 0.8, { solid: false });
-  prop('bottle', 0, 20.4, 8.9);
-
-  // ===== Кухня =====
-  place('counter', 0, 25.1, 6.1, 2.3, 0.9);
-  place('stove', 0, 27.5, 6.1, 1.2, 0.95);
-  place('counterSink', 0, 28.8, 6.1, 1.9, 0.9);
-  place('fridge', 0, 30.8, 6.1, 1.05, 1.15, { tall: true });
-  place('counter', 0, 25.1, 7.1, 0.9, 2.8, { rot: 0 });
-  place('island', 0, 27.4, 9.4, 2.2, 1.25);
-  place('chair', 0, 27.9, 10.8, 0.7, 0.7, { solid: false });
-  place('chair', 0, 29.0, 10.8, 0.7, 0.7, { solid: false });
-  prop('plate', 0, 28.2, 9.8);
-  prop('cup', 0, 29.2, 9.7);
-  prop('plate', 0, 26.0, 6.6);
-
-  // ===== Столовая =====
-  place('rugRound', 0, 34.6, 7.9, 4.0, 3.4, { solid: false });
-  place('diningTable', 0, 34.9, 8.4, 3.4, 1.9);
-  place('chair', 0, 35.3, 7.55, 0.7, 0.7, { solid: false });
-  place('chair', 0, 36.6, 7.55, 0.7, 0.7, { solid: false });
-  place('chair', 0, 35.3, 10.45, 0.7, 0.7, { solid: false });
-  place('chair', 0, 36.6, 10.45, 0.7, 0.7, { solid: false });
-  place('sideboard', 0, 33.15, 6.15, 2.1, 0.85);
-  place('plant', 0, 39.1, 6.2, 0.85, 0.85);
-  prop('plate', 0, 35.7, 8.9);
-  prop('cup', 0, 37.3, 9.4);
-  prop('bottle', 0, 34.0, 6.55);
-
-  // ===== Коридор =====
-  place('runner', 0, 13, 14.95, 15, 1.15, { solid: false });
-  place('console', 0, 23.8, 14.1, 1.9, 0.7);
-  place('closet', 0, 31.8, 14.08, 1.7, 0.92, { tall: true, hide: true, name: 'Чулан' });
-  place('coatrack', 0, 11.25, 14.2, 0.6, 0.6);
-  prop('book', 0, 24.5, 14.4);
-
-  // ===== Спальня =====
-  place('rugRect', 0, 11.6, 19.2, 4.2, 3.4, { solid: false });
-  place('bedDouble', 0, 11.9, 18.2, 2.0, 3.0); // дверь спальни в x14..15 — не заставлять!
-  place('nightstand', 0, 11.15, 18.25, 0.7, 0.7);
-  place('nightstand', 0, 11.15, 21.5, 0.7, 0.7);
-  place('wardrobe', 0, 17.0, 19.6, 0.92, 2.3, { tall: true, hide: true, name: 'Гардероб' });
-  place('dresser', 0, 11.15, 22.9, 1.9, 0.85);
-  prop('book', 0, 15.6, 21.6);
-
-  // ===== Ванная =====
-  place('tub', 0, 19.15, 21.5, 2.7, 1.35);
-  place('toilet', 0, 19.15, 18.3, 0.8, 1.15);
-  place('sinkCab', 0, 21.4, 18.2, 1.4, 0.8);
-  prop('bottle', 0, 21.9, 19.5);
-
-  // ===== Гостиная =====
-  place('rugRect', 0, 25.4, 19.5, 5.2, 3.2, { solid: false });
-  place('sofa', 0, 26.1, 21.9, 3.3, 1.15);
-  place('armchair', 0, 24.35, 19.9, 1.2, 1.3);
-  place('coffeeTable', 0, 27.0, 20.3, 1.9, 1.05);
-  place('tvstand', 0, 24.35, 18.12, 2.5, 0.72); // арка гостиной x27..30 — свободна
-  place('bookshelf', 0, 33.05, 19.2, 0.9, 2.5, { tall: true });
-  place('plant', 0, 24.35, 18.3, 0.85, 0.85);
-  prop('book', 0, 27.8, 20.7);
-  prop('cup', 0, 28.6, 20.55);
-  prop('bottle', 0, 25.1, 18.4);
-
-  // ===== Детская =====
-  place('rugRound', 0, 36.0, 19.8, 2.9, 2.6, { solid: false });
-  place('bedSingle', 0, 35.15, 18.2, 1.45, 2.5);
-  place('toychest', 0, 38.2, 18.25, 1.25, 0.9);
-  place('desk', 0, 38.15, 20.5, 0.9, 1.9);
-  place('wardrobe', 0, 35.6, 22.85, 1.7, 1.0, { tall: true, hide: true, name: 'Шкаф', rot: 0 });
-  prop('toy', 0, 36.9, 20.3);
-  prop('toy', 0, 37.6, 21.7);
-  prop('book', 0, 38.5, 19.4);
-
-  // ===== Подвал: кладовая =====
-  place('shelfTall', -1, 6.2, 3.1, 3.0, 0.8, { tall: true });
-  place('crate', -1, 3.2, 7.2, 1.25, 1.25);
-  place('crate', -1, 4.7, 7.5, 1.0, 1.0);
-  place('barrel', -1, 13.6, 3.3, 0.95, 0.95);
-  place('shelfTall', -1, 14.1, 6.5, 0.82, 2.4, { tall: true }); // дверь в котельную (15,5) свободна
-  prop('can', -1, 8.2, 6.6);
-  prop('bottle', -1, 11.5, 7.7);
-
-  // ===== Подвал: мастерская =====
-  place('workbench', -1, 3.15, 10.1, 3.0, 0.9);
-  place('shelfTall', -1, 9.0, 10.1, 2.5, 0.8, { tall: true });
-  place('crate', -1, 12.1, 12.6, 1.25, 1.25);
-  place('locker', -1, 14.05, 10.15, 0.9, 1.7, { tall: true, hide: true, name: 'Шкафчик' }); // дверь (15,12) свободна
-  prop('tool', -1, 7.2, 13.1);
-  prop('bottle', -1, 5.1, 12.2);
-
-  // ===== Подвал: котельная =====
-  place('boilerTank', -1, 24.4, 3.3, 1.7, 1.9, { tall: true });
-  place('crate', -1, 16.3, 12.9, 1.45, 1.25);
-  place('crate', -1, 18.0, 13.3, 1.0, 1.0);
-  place('shelfTall', -1, 26.1, 8.0, 0.85, 2.6, { tall: true });
-  place('oldchair', -1, 20.2, 10.1, 0.9, 0.9);
-  prop('can', -1, 21.2, 7.2);
-  prop('bottle', -1, 17.2, 4.3);
-
-  // ===== Экстерьер =====
-  const trees = [
-    [4.2, 4.0, 1.3], [8.5, 2.4, 1.0], [15, 2.2, 1.2], [25, 2.6, 1.0], [34, 2.2, 1.3],
-    [43, 4.5, 1.2], [45, 12, 1.0], [44.5, 20, 1.3], [43, 28, 1.1], [35, 30.5, 1.3],
-    [25, 31, 1.0], [15, 30.5, 1.2], [6.5, 29.5, 1.3], [2.5, 23, 1.0], [2.2, 5.5, 1.1],
-    [44, 31, 0.9], [9, 31.5, 0.9],
-  ].map(([x, y, r]) => ({ x: x * TILE, y: y * TILE, r: r * TILE }));
+  // ===== Экстерьер из чертежа =====
+  const trees = bp.exterior.trees.map(([x, y, r]) => ({ x: x * TILE, y: y * TILE, r: r * TILE }));
   for (const t of trees) {
     colliders[0].push({ x: t.x - 6, y: t.y - 6, w: 12, h: 12 }); // ствол
   }
-  const bushes = [
-    [11.5, 4.1], [17, 4.3], [23, 4.1], [31, 4.3], [37, 4.1],
-    [41.5, 7], [41.5, 14], [41.5, 22], [12, 25.5], [20, 25.6], [30, 25.4], [38, 25.6],
-    [8.5, 20], [8, 10],
-  ].map(([x, y]) => ({ x: x * TILE, y: y * TILE, r: (0.5 + Math.random() * 0.25) * TILE }));
-
-  // Забор по периметру участка
-  const fence = [
-    { x: 1 * TILE, y: 1 * TILE, w: 45.5 * TILE, h: 8 },
-    { x: 1 * TILE, y: 32.6 * TILE, w: 45.5 * TILE, h: 8 },
-    { x: 1 * TILE, y: 1 * TILE, w: 8, h: 31.8 * TILE },
-    { x: 46.3 * TILE, y: 1 * TILE, w: 8, h: 31.8 * TILE },
-  ];
+  const bushes = bp.exterior.bushes.map(([x, y]) => ({
+    x: x * TILE, y: y * TILE, r: (0.5 + Math.random() * 0.25) * TILE,
+  }));
+  // Забор по периметру участка ([x,y,w,h] в тайлах → пиксели)
+  const fence = bp.exterior.fence.map(([x, y, w, h]) => ({
+    x: x * TILE, y: y * TILE, w: w * TILE, h: h * TILE,
+  }));
   for (const r of fence) colliders[0].push(r);
 
   // Фургон (кузов — коллайдер)

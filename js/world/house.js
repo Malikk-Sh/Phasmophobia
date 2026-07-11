@@ -65,11 +65,13 @@ class FloorGrid {
   }
 }
 
-export function buildWorld() {
+export function buildWorld(blueprint) {
+  const bp = blueprint;
   const rooms = [];
   const doors = [];
   const windows = [];
   const stairs = [];
+  const roomByKey = {};
 
   let nextRoom = 0;
   function addRoom(key, name, floor, opts = {}) {
@@ -82,46 +84,18 @@ export function buildWorld() {
       ...opts,
     };
     rooms.push(r);
+    roomByKey[key] = r;
     return r;
   }
-
-  // ================= ПЕРВЫЙ ЭТАЖ (48 x 34) =================
-  const g = new FloorGrid(48, 34);
-  g.setOutdoor(0, 0, 48, 34);
-
-  // Оболочка дома: cols 10..40, rows 5..24
-  g.fillSolid(10, 5, 31, 20);
-
   function carveRoom(room, grid, x, y, w, h) {
     grid.carve(x, y, w, h, room.id);
     room.rects.push({ x, y, w, h });
   }
 
-  const garage = addRoom('garage', 'Гараж', 0);
-  const utility = addRoom('utility', 'Прачечная', 0);
-  const kitchen = addRoom('kitchen', 'Кухня', 0);
-  const dining = addRoom('dining', 'Столовая', 0);
-  const hall = addRoom('hall', 'Коридор', 0);
-  const master = addRoom('master', 'Спальня', 0);
-  const bath = addRoom('bath', 'Ванная', 0);
-  const living = addRoom('living', 'Гостиная', 0);
-  const kids = addRoom('kids', 'Детская', 0);
-
-  carveRoom(garage, g, 11, 6, 8, 7);
-  carveRoom(utility, g, 20, 6, 4, 7);
-  carveRoom(kitchen, g, 25, 6, 7, 7);
-  carveRoom(dining, g, 33, 6, 7, 7);
-  carveRoom(hall, g, 11, 14, 29, 3);
-  carveRoom(master, g, 11, 18, 7, 6);
-  carveRoom(bath, g, 19, 18, 4, 6);
-  carveRoom(living, g, 24, 18, 10, 6);
-  carveRoom(kids, g, 35, 18, 5, 6);
-
   // Двери (tx, ty — тайл в стене; carve + объект двери)
   let nextDoor = 0;
   function addDoor(grid, floor, tx, ty, orient, opts = {}) {
     grid.carve(tx, ty, 1, 1, opts.roomId ?? OUTSIDE);
-    // тайл двери принадлежит комнате рядом (для карты) — не критично
     const d = {
       id: nextDoor++, floor, tx, ty, orient,
       open: opts.open ?? false, swing: opts.open ? 1 : 0, // 0 закрыта, 1 открыта (анимация)
@@ -131,92 +105,58 @@ export function buildWorld() {
     doors.push(d);
     return d;
   }
-  // проёмы без двери (арки)
-  function carveArch(grid, tx, ty, w, h) { grid.carve(tx, ty, w, h, hall.id); }
-
-  addDoor(g, 0, 14, 13, 'h'); // гараж
-  addDoor(g, 0, 21, 13, 'h'); // прачечная
-  addDoor(g, 0, 36, 13, 'h'); // столовая
-  addDoor(g, 0, 14, 17, 'h'); // спальня
-  addDoor(g, 0, 20, 17, 'h'); // ванная
-  addDoor(g, 0, 37, 17, 'h'); // детская
-  carveArch(g, 27, 13, 2, 1); // кухня — арка
-  carveArch(g, 27, 17, 3, 1); // гостиная — широкая арка
-  const frontDoor = addDoor(g, 0, 10, 15, 'v', { isFront: true });
-
-  // Крыльцо (снаружи, деревянный настил)
-  const PORCH = { x: 7, y: 14, w: 3, h: 3 };
-
-  // Окна (декор + лунный свет внутрь): по внешним стенам
-  const winList = [
-    [13, 5, 'h'], [16, 5, 'h'], [27, 5, 'h'], [30, 5, 'h'], [35, 5, 'h'], [38, 5, 'h'],
-    [13, 24, 'h'], [16, 24, 'h'], [27, 24, 'h'], [31, 24, 'h'], [36, 24, 'h'], [38, 24, 'h'],
-    [40, 8, 'v'], [40, 10, 'v'], [40, 20, 'v'], [40, 22, 'v'],
-    [10, 19, 'v'], [10, 21, 'v'],
-  ];
-  for (const [tx, ty, o] of winList) windows.push({ floor: 0, tx, ty, orient: o });
-  // Ворота гаража (декор на западной стене)
-  const garageDoorDecor = { floor: 0, tx: 10, ty: 7, h: 5 };
-
-  // Лестница в подвал: в прачечной, тайлы (22..23, 6..8), триггер на row 6
-  const stairsDown = {
-    floor: 0, tiles: { x: 22, y: 6, w: 2, h: 3 },
-    trigger: { x: 22, y: 6, w: 2, h: 1 },
-    target: { floor: FLOOR_BASEMENT, x: 4 * TILE, y: 5.5 * TILE },
-    dir: 'down',
-  };
-  stairs.push(stairsDown);
-
-  // ================= ПОДВАЛ (30 x 18) =================
-  const b = new FloorGrid(30, 18);
-  // подвал не под открытым небом
-  b.outdoor.fill(0);
-  b.fillSolid(0, 0, 30, 18); // всё камень
-
-  const cellar = addRoom('cellar', 'Кладовая', FLOOR_BASEMENT);
-  const workshop = addRoom('workshop', 'Мастерская', FLOOR_BASEMENT);
-  const boiler = addRoom('boiler', 'Котельная', FLOOR_BASEMENT);
-
-  carveRoom(cellar, b, 3, 3, 12, 6);    // rows 3..8
-  carveRoom(workshop, b, 3, 10, 12, 5); // rows 10..14
-  carveRoom(boiler, b, 16, 3, 11, 12);  // cols 16..26
-  addDoor(b, FLOOR_BASEMENT, 8, 9, 'h');   // кладовая-мастерская
-  addDoor(b, FLOOR_BASEMENT, 15, 5, 'v');  // кладовая-котельная
-  addDoor(b, FLOOR_BASEMENT, 15, 12, 'v'); // мастерская-котельная
-
-  // Лестница вверх: в кладовой, тайлы (3..4, 3..5), триггер row 3
-  const stairsUp = {
-    floor: FLOOR_BASEMENT, tiles: { x: 3, y: 3, w: 2, h: 3 },
-    trigger: { x: 3, y: 3, w: 2, h: 1 },
-    target: { floor: 0, x: 22.9 * TILE, y: 8.4 * TILE },
-    dir: 'up',
-  };
-  stairs.push(stairsUp);
-  // стыковка: триггер вниз ведёт на низ лестницы подвала
-  stairsDown.target = { floor: FLOOR_BASEMENT, x: 3.9 * TILE, y: 6.4 * TILE };
-  stairsUp.target = { floor: 0, x: 22.9 * TILE, y: 8.6 * TILE };
-
-  // Лампы и выключатели
   function lampAt(room, tx, ty) { room.lamps.push({ x: tx * TILE, y: ty * TILE }); }
   function switchAt(room, tx, ty) { room.switch = { x: tx * TILE, y: ty * TILE, room: room.id, touchedUV: 0 }; }
 
-  lampAt(garage, 15, 9.5); switchAt(garage, 15.4, 12.4);
-  lampAt(utility, 21, 10); switchAt(utility, 22.3, 12.4);
-  lampAt(kitchen, 28.5, 9.5); switchAt(kitchen, 26.3, 12.4);
-  lampAt(dining, 36.5, 9.5); switchAt(dining, 37.3, 12.4);
-  lampAt(hall, 16, 15.5); lampAt(hall, 25.5, 15.5); lampAt(hall, 34, 15.5);
-  // не ставить рядом с входной дверью (10,15) — перехватывает кнопку действия
-  switchAt(hall, 13.2, 14.4);
-  lampAt(master, 14.5, 21); switchAt(master, 15.3, 17.6);
-  lampAt(bath, 21, 21); switchAt(bath, 21.3, 17.6);
-  lampAt(living, 29, 20.5); switchAt(living, 30.6, 17.6);
-  lampAt(kids, 37.5, 21); switchAt(kids, 38.2, 17.6);
-  lampAt(cellar, 9, 6); switchAt(cellar, 5.6, 3.7);
-  lampAt(workshop, 9, 12.5); switchAt(workshop, 9.3, 9.7);
-  lampAt(boiler, 21.5, 9); switchAt(boiler, 16.4, 5.8);
+  // ================= ПЕРВЫЙ ЭТАЖ =================
+  const gc = bp.ground;
+  const g = new FloorGrid(gc.W, gc.H);
+  g.setOutdoor(0, 0, gc.W, gc.H);
+  g.fillSolid(gc.shell.x, gc.shell.y, gc.shell.w, gc.shell.h); // оболочка дома
+  for (const rd of gc.rooms) {
+    const room = addRoom(rd.key, rd.name, 0);
+    carveRoom(room, g, rd.rect.x, rd.rect.y, rd.rect.w, rd.rect.h);
+  }
+  let frontDoor = null;
+  for (const d of gc.doors) {
+    const dd = addDoor(g, 0, d.tx, d.ty, d.orient, { isFront: d.front });
+    if (d.front) frontDoor = dd;
+  }
+  // проёмы без двери (арки) — тайл принадлежит указанной комнате
+  for (const a of (gc.arches || [])) g.carve(a.tx, a.ty, a.w, a.h, roomByKey[a.room].id);
 
-  // Щиток (в гараже, у западной стены)
-  const breaker = { floor: 0, x: 11.5 * TILE, y: 7.4 * TILE, on: true, touchedUV: 0 };
+  const PORCH = { ...bp.porch };
+  for (const [tx, ty, o] of gc.windows) windows.push({ floor: 0, tx, ty, orient: o });
+  const garageDoorDecor = gc.garageDoorDecor ? { floor: 0, ...gc.garageDoorDecor } : null;
+
+  // ================= ПОДВАЛ =================
+  const bc = bp.basement;
+  const b = new FloorGrid(bc.W, bc.H);
+  b.outdoor.fill(0);         // подвал не под открытым небом
+  b.fillSolid(0, 0, bc.W, bc.H); // всё камень
+  for (const rd of bc.rooms) {
+    const room = addRoom(rd.key, rd.name, FLOOR_BASEMENT);
+    carveRoom(room, b, rd.rect.x, rd.rect.y, rd.rect.w, rd.rect.h);
+  }
+  for (const d of bc.doors) addDoor(b, FLOOR_BASEMENT, d.tx, d.ty, d.orient);
+
+  // Лестницы (цели — в пикселях)
+  const mkStair = (s) => ({
+    floor: s.floor, tiles: { ...s.tiles }, trigger: { ...s.trigger },
+    target: { floor: s.target.floor, x: s.target.x * TILE, y: s.target.y * TILE }, dir: s.dir,
+  });
+  const stairsDown = mkStair(bp.stairs.down);
+  const stairsUp = mkStair(bp.stairs.up);
+  stairs.push(stairsDown, stairsUp);
+
+  // Лампы и выключатели
+  for (const [key, tx, ty] of gc.lamps) lampAt(roomByKey[key], tx, ty);
+  for (const [key, tx, ty] of gc.switches) switchAt(roomByKey[key], tx, ty);
+  for (const [key, tx, ty] of bc.lamps) lampAt(roomByKey[key], tx, ty);
+  for (const [key, tx, ty] of bc.switches) switchAt(roomByKey[key], tx, ty);
+
+  // Щиток
+  const breaker = { floor: 0, x: gc.breaker.x * TILE, y: gc.breaker.y * TILE, on: true, touchedUV: 0 };
 
   // Сегменты стен
   g.buildSegments();
@@ -224,15 +164,18 @@ export function buildWorld() {
 
   const floors = { [FLOOR_GROUND]: g, [FLOOR_BASEMENT]: b };
 
-  // Фургон и спавн (мир в пикселях)
-  const van = { x: 1.8 * TILE, y: 9 * TILE, w: 3 * TILE, h: 6 * TILE }; // прямоугольник кузова
-  const spawn = { x: 5.7 * TILE, y: 15.6 * TILE };
+  // Фургон, спавн и опорная точка ТВ (мир в пикселях)
+  const van = { x: bp.van.x * TILE, y: bp.van.y * TILE, w: bp.van.w * TILE, h: bp.van.h * TILE };
+  const spawn = { x: bp.spawn.x * TILE, y: bp.spawn.y * TILE };
+  const tv = bp.tv ? { x: bp.tv.x * TILE, y: bp.tv.y * TILE, floor: bp.tv.floor } : null;
 
   const world = {
     floors, rooms, doors, windows, stairs, breaker,
     frontDoorId: frontDoor.id,
     porch: PORCH, garageDoorDecor,
-    van, spawn,
+    van, spawn, tv,
+    decor: bp.decor || [],
+    blueprint: bp,
     emfEvents: [],   // {x,y,floor,level,t}
     prints: [],      // УФ-отпечатки {x,y,floor,t,kind}
     saltPiles: [],   // {x,y,floor,disturbed,step:[]}

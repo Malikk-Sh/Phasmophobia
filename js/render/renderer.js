@@ -53,22 +53,8 @@ export class Renderer {
       c.fill();
     }
 
-    // подъездная дорожка к гаражу (запад)
-    c.fillStyle = '#2e3034';
-    c.fillRect(1.4 * TILE, 7.6 * TILE, 8.6 * TILE, 3.8 * TILE);
-    for (let i = 0; i < 130; i++) {
-      c.fillStyle = `rgba(${70 + rng() * 40 | 0},${72 + rng() * 40 | 0},${78 + rng() * 40 | 0},.25)`;
-      c.fillRect(1.4 * TILE + rng() * 8.6 * TILE, 7.6 * TILE + rng() * 3.8 * TILE, 2, 2);
-    }
-
-    // дорожка от фургона к крыльцу
-    for (let i = 0; i < 9; i++) {
-      const x = (4.9 + i * 0.62) * TILE, y = 15.5 * TILE + Math.sin(i * 1.7) * 5;
-      c.fillStyle = '#33373d';
-      c.beginPath(); c.ellipse(x, y, 12, 9, rng() * 0.6, 0, 7); c.fill();
-      c.fillStyle = 'rgba(255,255,255,.05)';
-      c.beginPath(); c.ellipse(x - 2, y - 2, 8, 5, 0, 0, 7); c.fill();
-    }
+    // фоновые дорожки (под полами комнат) — из чертежа
+    this.paintGroundDecor(c, rng);
 
     // крыльцо
     const P = this.world.porch;
@@ -167,11 +153,6 @@ export class Renderer {
       c.stroke();
     }
     this.paintWalls(c, g);
-    // трубы вдоль стен котельной
-    c.strokeStyle = '#3a3430'; c.lineWidth = 5;
-    c.beginPath(); c.moveTo(16.2 * TILE, 3.4 * TILE); c.lineTo(26.6 * TILE, 3.4 * TILE); c.stroke();
-    c.strokeStyle = '#443c34'; c.lineWidth = 3;
-    c.beginPath(); c.moveTo(16.2 * TILE, 3.7 * TILE); c.lineTo(26.6 * TILE, 3.7 * TILE); c.stroke();
     this.paintThresholds(c, FLOOR_BASEMENT);
     this.paintDetails(c, FLOOR_BASEMENT, rng);
     this.paintStairs(c, FLOOR_BASEMENT);
@@ -285,94 +266,134 @@ export class Renderer {
       }
     }
 
+    // шторы у окон (короткие тканевые «язычки» с внутренней стороны)
     if (floor === 0) {
-      // шторы у окон (короткие тканевые «язычки» с внутренней стороны)
       c.fillStyle = '#3f3a4e';
+      const g = this.world.floors[0];
       for (const w of this.world.windows) {
         const x = w.tx * TILE, y = w.ty * TILE;
         if (w.orient === 'h') {
-          const iy = w.ty === 5 ? y + TILE : y - 6; // интерьер снизу/сверху
+          // интерьер — со стороны, где комната (roomAt != OUTSIDE)
+          const iy = g.roomAt(w.tx, w.ty + 1) !== OUTSIDE ? y + TILE : y - 6;
           c.fillRect(x + 2, iy, 8, 6);
           c.fillRect(x + TILE - 10, iy, 8, 6);
         } else {
-          const ix = w.tx === 10 ? x + TILE : x - 6;
+          const ix = g.roomAt(w.tx + 1, w.ty) !== OUTSIDE ? x + TILE : x - 6;
           c.fillRect(ix, y + 2, 6, 8);
           c.fillRect(ix, y + TILE - 10, 6, 8);
         }
       }
-      // картины на стенах коридора и спален
-      const frames = [[17.3, 13], [23.2, 13], [31.4, 13], [21.6, 17], [33.2, 17], [12.4, 17]];
-      const art = ['#31424a', '#4a3535', '#3c4a35', '#42394f', '#4a4231', '#35404a'];
-      frames.forEach(([fx, fy], i) => {
-        const x = fx * TILE, y = fy * TILE + TILE / 2 - 5;
-        c.fillStyle = '#5c4a28';
-        c.fillRect(x, y, 14, 10);
-        c.fillStyle = art[i % art.length];
-        c.fillRect(x + 1.5, y + 1.5, 11, 7);
-        c.fillStyle = 'rgba(255,255,255,.12)';
-        c.fillRect(x + 2, y + 2, 4, 2.5);
-      });
-      // коврики: у входной двери и в ванной
-      c.fillStyle = '#4c3d26';
-      c.fillRect(9.05 * TILE, 15.08 * TILE, 0.85 * TILE, 0.84 * TILE);
-      c.strokeStyle = 'rgba(0,0,0,.4)'; c.lineWidth = 1.5;
-      c.strokeRect(9.13 * TILE, 15.16 * TILE, 0.69 * TILE, 0.68 * TILE);
-      c.fillStyle = '#57493a';
-      c.fillRect(11.1 * TILE, 15.1 * TILE, 0.8 * TILE, 0.8 * TILE);
-      c.fillStyle = '#8ea0a8'; // мягкий коврик у ванны
-      c.beginPath(); c.ellipse(20.4 * TILE, 20.8 * TILE, 13, 8, 0, 0, 7); c.fill();
-      // пятно масла под машиной
-      c.fillStyle = 'rgba(10,10,12,.5)';
-      c.beginPath(); c.ellipse(12.7 * TILE, 10.2 * TILE, 20, 12, 0.3, 0, 7); c.fill();
-      // паутина в углах гаража
-      this.cobweb(c, 11 * TILE, 6 * TILE, 1);
-      this.cobweb(c, 19 * TILE, 6 * TILE, -1);
-      // навесные шкафчики кухни вдоль северной стены
-      c.fillStyle = 'rgba(30,24,16,.55)';
-      c.fillRect(25.1 * TILE, 6 * TILE, 2.2 * TILE, 9);
-      c.fillRect(28.9 * TILE, 6 * TILE, 1.8 * TILE, 9);
-      c.strokeStyle = 'rgba(0,0,0,.5)'; c.lineWidth = 1;
-      for (const bx of [25.8, 26.6, 29.5, 30.2]) {
-        c.beginPath(); c.moveTo(bx * TILE, 6 * TILE + 1); c.lineTo(bx * TILE, 6 * TILE + 8); c.stroke();
-      }
-      // клумбы вдоль южной стены дома
-      for (const [bx, bw] of [[12, 3.4], [29.5, 3.6]]) {
-        c.fillStyle = '#241d14';
-        c.beginPath();
-        c.roundRect ? c.roundRect(bx * TILE, 25.15 * TILE, bw * TILE, 14, 6) : c.rect(bx * TILE, 25.15 * TILE, bw * TILE, 14);
-        c.fill();
-        for (let i = 0; i < bw * 3; i++) {
-          c.fillStyle = ['#5a6a7a', '#6a5a72', '#7a7060'][i % 3];
-          c.beginPath();
-          c.arc((bx + 0.25 + (i * 0.32)) * TILE, 25.15 * TILE + 5 + (i % 2) * 5, 2.2, 0, 7);
-          c.fill();
+    }
+    // авторский декор карты (картины, шкафы, клумбы, трубы, паутина…) из чертежа
+    this.paintDecor(c, floor, rng);
+  }
+
+  // Фоновые дорожки под полами комнат (kind: driveway|vanPath), только этаж 0.
+  paintGroundDecor(c, rng) {
+    for (const e of this.world.decor) {
+      if (e.floor !== 0) continue;
+      if (e.kind === 'driveway') {
+        c.fillStyle = '#2e3034';
+        c.fillRect(e.x * TILE, e.y * TILE, e.w * TILE, e.h * TILE);
+        for (let i = 0; i < 130; i++) {
+          c.fillStyle = `rgba(${70 + rng() * 40 | 0},${72 + rng() * 40 | 0},${78 + rng() * 40 | 0},.25)`;
+          c.fillRect((e.x + rng() * e.w) * TILE, (e.y + rng() * e.h) * TILE, 2, 2);
+        }
+      } else if (e.kind === 'vanPath') {
+        for (let i = 0; i < e.n; i++) {
+          const x = (e.x + i * e.step) * TILE, y = e.y * TILE + Math.sin(i * 1.7) * 5;
+          c.fillStyle = '#33373d';
+          c.beginPath(); c.ellipse(x, y, 12, 9, rng() * 0.6, 0, 7); c.fill();
+          c.fillStyle = 'rgba(255,255,255,.05)';
+          c.beginPath(); c.ellipse(x - 2, y - 2, 8, 5, 0, 0, 7); c.fill();
         }
       }
-    } else {
-      // подвал: паутина в углах, разбросанные бумаги, перфопанель с инструментом
-      this.cobweb(c, 3 * TILE, 3 * TILE, 1);
-      this.cobweb(c, 15 * TILE, 3 * TILE, -1);
-      this.cobweb(c, 16 * TILE, 3 * TILE, 1);
-      this.cobweb(c, 27 * TILE, 3 * TILE, -1);
-      this.cobweb(c, 3 * TILE, 10 * TILE, 1);
-      c.fillStyle = 'rgba(180,175,160,.14)';
-      for (let i = 0; i < 8; i++) {
-        c.save();
-        c.translate((4 + rng() * 20) * TILE, (5 + rng() * 8) * TILE);
-        c.rotate(rng() * 3);
-        c.fillRect(-4, -3, 8, 6);
-        c.restore();
+    }
+  }
+
+  // Авторские декали поверх стен (картины, коврики, шкафы, клумбы, трубы,
+  // паутина, бумаги, перфопанель). Координаты — из чертежа (world.decor).
+  paintDecor(c, floor, rng) {
+    for (const e of this.world.decor) {
+      if (e.floor !== floor) continue;
+      switch (e.kind) {
+        case 'painting': {
+          const x = e.x * TILE, y = e.y * TILE + TILE / 2 - 5;
+          c.fillStyle = '#5c4a28'; c.fillRect(x, y, 14, 10);
+          c.fillStyle = e.color; c.fillRect(x + 1.5, y + 1.5, 11, 7);
+          c.fillStyle = 'rgba(255,255,255,.12)'; c.fillRect(x + 2, y + 2, 4, 2.5);
+          break;
+        }
+        case 'mat': {
+          c.fillStyle = e.color;
+          c.fillRect(e.x * TILE, e.y * TILE, e.w * TILE, e.h * TILE);
+          if (e.stroke) {
+            c.strokeStyle = 'rgba(0,0,0,.4)'; c.lineWidth = 1.5;
+            c.strokeRect((e.x + 0.08) * TILE, (e.y + 0.08) * TILE, (e.w - 0.16) * TILE, (e.h - 0.16) * TILE);
+          }
+          break;
+        }
+        case 'bathMat':
+          c.fillStyle = '#8ea0a8';
+          c.beginPath(); c.ellipse(e.x * TILE, e.y * TILE, 13, 8, 0, 0, 7); c.fill();
+          break;
+        case 'oil':
+          c.fillStyle = 'rgba(10,10,12,.5)';
+          c.beginPath(); c.ellipse(e.x * TILE, e.y * TILE, 20, 12, 0.3, 0, 7); c.fill();
+          break;
+        case 'cobweb':
+          this.cobweb(c, e.x * TILE, e.y * TILE, e.dir);
+          break;
+        case 'cabinets': {
+          const y = e.y * TILE;
+          c.fillStyle = 'rgba(30,24,16,.55)';
+          for (const [bx, bw] of e.blocks) c.fillRect(bx * TILE, y, bw * TILE, 9);
+          c.strokeStyle = 'rgba(0,0,0,.5)'; c.lineWidth = 1;
+          for (const bx of e.doorX) {
+            c.beginPath(); c.moveTo(bx * TILE, y + 1); c.lineTo(bx * TILE, y + 8); c.stroke();
+          }
+          break;
+        }
+        case 'flowerbed': {
+          const y = (e.y ?? 25.15) * TILE;
+          c.fillStyle = '#241d14';
+          c.beginPath();
+          c.roundRect ? c.roundRect(e.x * TILE, y, e.w * TILE, 14, 6) : c.rect(e.x * TILE, y, e.w * TILE, 14);
+          c.fill();
+          for (let i = 0; i < e.w * 3; i++) {
+            c.fillStyle = ['#5a6a7a', '#6a5a72', '#7a7060'][i % 3];
+            c.beginPath();
+            c.arc((e.x + 0.25 + i * 0.32) * TILE, y + 5 + (i % 2) * 5, 2.2, 0, 7);
+            c.fill();
+          }
+          break;
+        }
+        case 'pipes':
+          c.strokeStyle = '#3a3430'; c.lineWidth = 5;
+          c.beginPath(); c.moveTo(e.x1 * TILE, e.y * TILE); c.lineTo(e.x2 * TILE, e.y * TILE); c.stroke();
+          c.strokeStyle = '#443c34'; c.lineWidth = 3;
+          c.beginPath(); c.moveTo(e.x1 * TILE, (e.y + 0.3) * TILE); c.lineTo(e.x2 * TILE, (e.y + 0.3) * TILE); c.stroke();
+          break;
+        case 'papers':
+          c.fillStyle = 'rgba(180,175,160,.14)';
+          for (let i = 0; i < e.n; i++) {
+            c.save();
+            c.translate((e.x + rng() * e.w) * TILE, (e.y + rng() * e.h) * TILE);
+            c.rotate(rng() * 3);
+            c.fillRect(-4, -3, 8, 6);
+            c.restore();
+          }
+          break;
+        case 'pegboard':
+          c.fillStyle = '#3a2f22'; c.fillRect(e.x * TILE, e.y * TILE, 2.5 * TILE, 0.65 * TILE);
+          c.fillStyle = '#8a8f94';
+          c.fillRect((e.x + 0.2) * TILE, (e.y + 0.15) * TILE, 3, 10);
+          c.fillRect((e.x + 0.7) * TILE, (e.y + 0.2) * TILE, 8, 3);
+          c.fillStyle = '#6b4226'; c.fillRect((e.x + 1.4) * TILE, (e.y + 0.13) * TILE, 3, 11);
+          c.fillStyle = '#5a5f64';
+          c.beginPath(); c.arc((e.x + 2.1) * TILE, (e.y + 0.3) * TILE, 4, 0, 7); c.stroke();
+          break;
       }
-      // перфопанель над верстаком мастерской
-      c.fillStyle = '#3a2f22';
-      c.fillRect(3.4 * TILE, 9.2 * TILE, 2.5 * TILE, 0.65 * TILE);
-      c.fillStyle = '#8a8f94';
-      c.fillRect(3.6 * TILE, 9.35 * TILE, 3, 10);
-      c.fillRect(4.1 * TILE, 9.4 * TILE, 8, 3);
-      c.fillStyle = '#6b4226';
-      c.fillRect(4.8 * TILE, 9.33 * TILE, 3, 11);
-      c.fillStyle = '#5a5f64';
-      c.beginPath(); c.arc(5.5 * TILE, 9.5 * TILE, 4, 0, 7); c.stroke();
     }
   }
 
@@ -583,8 +604,8 @@ export class Renderer {
     if (world.cursed && world.cursed.floor === floor) this.drawCursed(ctx, world.cursed, t);
 
     // телевизор ожил помехами (микрособытие гостиной)
-    if (floor === 0 && game.tvStaticT > 0) {
-      const tx = 25.6 * TILE, ty = 18.35 * TILE;
+    if (world.tv && world.tv.floor === floor && game.tvStaticT > 0) {
+      const tx = world.tv.x, ty = world.tv.y;
       const fl = 0.5 + Math.random() * 0.5;
       ctx.fillStyle = `rgba(160,190,220,${0.5 * fl})`;
       ctx.fillRect(tx - 34, ty - 5, 68, 9);
@@ -719,9 +740,10 @@ export class Renderer {
     }
 
     // помехи телевизора в освещённой гостиной
-    if (room.key === 'living' && game.tvStaticT > 0) {
+    if (world.tv && world.tv.floor === room.floor && game.tvStaticT > 0 &&
+      world.roomAt(world.tv.floor, world.tv.x, world.tv.y) === room.id) {
       ctx.fillStyle = `rgba(160,190,220,${alpha * 2 * Math.random()})`;
-      ctx.fillRect(25.6 * TILE - 30, 18.35 * TILE - 6, 60, 10);
+      ctx.fillRect(world.tv.x - 30, world.tv.y - 6, 60, 10);
     }
 
     // страницы книги шевельнулись (сам факт записи засчитывается только вблизи)

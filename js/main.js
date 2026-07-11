@@ -6,6 +6,7 @@ import { Camera } from './core/camera.js';
 import { audio } from './core/audio.js';
 import { buildWorld, FLOOR_BASEMENT, OUTSIDE } from './world/house.js';
 import { furnish } from './world/furniture.js';
+import { MAPS } from './world/maps.js';
 import { computeVisibility } from './render/visibility.js';
 import { Lighting } from './render/lighting.js';
 import { FX } from './render/fx.js';
@@ -75,8 +76,11 @@ const game = {
     this.rng = makeRng(this.contractSeed);
     setRng(this.rng); // игровая логика контракта — на сидированном ГСЧ
     this.hintCooldown = 0;
-    this.world = buildWorld();
-    furnish(this.world);
+    // карта контракта: выбор по сид-RNG (setRng уже активен) — партия воспроизводима
+    const blueprint = rndPick(MAPS);
+    this.blueprint = blueprint;
+    this.world = buildWorld(blueprint);
+    furnish(this.world, blueprint);
     this.renderer = new Renderer(this.world);
     this.player = new Player(this.world);
 
@@ -114,6 +118,7 @@ const game = {
     const last = rndPick(['Волкова', 'Черных', 'Мельников', 'Соколова', 'Громов', 'Зимина', 'Крылов', 'Одинцова'])
       .replace(/а$/, first.endsWith('а') || first.endsWith('я') ? 'а' : '');
     this.dossier = {
+      address: blueprint.address,
       name: `${first} ${last}`,
       years: `${1921 + Math.floor(Math.random() * 40)}–${1978 + Math.floor(Math.random() * 30)}`,
       death: rndPick([
@@ -145,8 +150,8 @@ const game = {
     audio.setAmbience(false, false);
     this.log('Снаряжение — в фургоне. Удачи.');
     // seed контракта для воспроизведения партий (debug)
-    try { console.info(`[contract] seed=${this.contractSeed} ghost=${this.ghost.data.key}`); } catch { /* нет консоли */ }
-    if (localStorage.getItem('phasmo-debug')) this.log(`SEED ${this.contractSeed} · ${this.ghost.data.key}`, 'evidence');
+    try { console.info(`[contract] seed=${this.contractSeed} map=${this.blueprint.id} ghost=${this.ghost.data.key}`); } catch { /* нет консоли */ }
+    if (localStorage.getItem('phasmo-debug')) this.log(`SEED ${this.contractSeed} · ${this.blueprint.id} · ${this.ghost.data.key}`, 'evidence');
   },
 
   checkObjective(key) {
