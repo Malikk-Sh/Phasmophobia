@@ -36,6 +36,14 @@ export const ITEMS = {
     name: 'DOTS-проектор', icon: 'dots', place: true,
     desc: 'Проецирует лазерную сетку. Часть призраков проявляется в ней зелёным силуэтом.',
   },
+  motion: {
+    name: 'Датчик движения', icon: 'motion', place: true,
+    desc: 'Ставится в комнате. Мигает и пищит, когда призрак проходит рядом — видно на мониторе фургона, даже когда вас нет в комнате.',
+  },
+  sound: {
+    name: 'Датчик звука', icon: 'mic', place: true,
+    desc: 'Ставится в комнате. Показывает уровень шума от призрака (шаги, возня) на мониторе фургона — помогает найти активную зону.',
+  },
   ward: {
     name: 'Оберег', icon: 'ward', place: true,
     desc: 'Старинный защитный амулет. Не даёт призраку начать охоту рядом с собой. Два заряда, затем гаснет.',
@@ -65,6 +73,7 @@ export const equipment = {
     this.spiritCooldown = 0;
     this.emfLevel = 0;
     this.fakeEmfT = 0;
+    this._ghPrev = null; // для датчика движения
     game.itemUses = { smudge: 2, salt: 3, pills: 1, photo: 5 };
     game.photos = [];
     game.ghostPhotoCount = 0;
@@ -203,6 +212,39 @@ export const equipment = {
         game.onEvidenceSeen('writing');
       }
     }
+
+    // ---------- Датчики движения/звука ----------
+    // не дают улику: показывают активность призрака удалённо (для монитора фургона).
+    const gh = game.ghost;
+    if (gh) {
+      const prev = this._ghPrev;
+      const ghMoved = (prev && prev.floor === gh.floor)
+        ? Math.hypot(gh.x - prev.x, gh.y - prev.y) : 0;
+      this._ghPrev = { x: gh.x, y: gh.y, floor: gh.floor };
+      const moving = ghMoved > dt * 22; // порог ~22 px/s
+      for (const p of world.placed) {
+        if (p.type === 'motion') {
+          p.tripT = Math.max(0, (p.tripT || 0) - dt);
+          p.pingCd = Math.max(0, (p.pingCd || 0) - dt);
+          if (gh.floor === p.floor && moving && Math.hypot(gh.x - p.x, gh.y - p.y) < TILE * 3.2) {
+            const wasTripped = p.tripT > 0.01;
+            p.tripT = 1.4;
+            if (!wasTripped && p.pingCd <= 0) {
+              p.pingCd = 3;
+              audio.sensorPing(audio.panFor(p.x));
+              const room = world.roomById(world.roomAt(p.floor, p.x, p.y));
+              game.log(`Датчик движения: ${room ? room.name : 'движение'}`);
+            }
+          }
+        } else if (p.type === 'sound') {
+          const d = gh.floor === p.floor ? Math.hypot(gh.x - p.x, gh.y - p.y) : Infinity;
+          const prox = clamp(1 - d / (TILE * 4.5), 0, 1);
+          const act = clamp((gh.activity || 0) / 10, 0, 1);
+          const target = prox * (0.35 + act * 0.65);
+          p.level = (p.level || 0) + (target - (p.level || 0)) * Math.min(1, dt * 3);
+        }
+      }
+    }
   },
 
   // данные для HUD-панели показаний
@@ -276,6 +318,7 @@ export const equipment = {
         type: item, x: px, y: py, floor: pl.floor,
         angle: pl.angle, written: false, seen: false,
         charges: item === 'ward' ? 2 : 0, burnT: 0, phase: Math.random() * 6.28,
+        tripT: 0, level: 0, pingCd: 0, // датчики
       });
       pl.inventory[pl.activeSlot] = null;
       audio.cameraPlace();
@@ -456,6 +499,32 @@ export function drawPlaced(ctx, it, t, game) {
       ctx.fillStyle = g;
       ctx.beginPath(); ctx.arc(0, 0, TILE * 3.4, 0, 7); ctx.fill();
     }
+  } else if (it.type === 'motion') {
+    ctx.fillStyle = 'rgba(0,0,0,.3)';
+    ctx.beginPath(); ctx.ellipse(1, 2, 5, 4, 0, 0, 7); ctx.fill();
+    ctx.fillStyle = '#2a2f34'; ctx.fillRect(-4, -5, 8, 7);        // корпус
+    ctx.fillStyle = '#11161a';
+    ctx.beginPath(); ctx.ellipse(0, -1.4, 2.6, 2, 0, 0, 7); ctx.fill(); // линза PIR
+    const trip = (it.tripT || 0) > 0.01;
+    ctx.fillStyle = trip ? '#ff3b30' : '#3a2016';                 // LED
+    ctx.beginPath(); ctx.arc(2.6, -3.9, 1, 0, 7); ctx.fill();
+    if (trip) {
+      const a = Math.min(1, it.tripT / 1.4);
+      const g = ctx.createRadialGradient(0, 0, 2, 0, 0, TILE * 1.9);
+      g.addColorStop(0, `rgba(255,70,50,${0.2 * a})`);
+      g.addColorStop(1, 'rgba(255,70,50,0)');
+      ctx.fillStyle = g; ctx.beginPath(); ctx.arc(0, 0, TILE * 1.9, 0, 7); ctx.fill();
+    }
+  } else if (it.type === 'sound') {
+    ctx.fillStyle = 'rgba(0,0,0,.3)';
+    ctx.beginPath(); ctx.ellipse(1, 2, 5, 4, 0, 0, 7); ctx.fill();
+    ctx.fillStyle = '#2a2f34'; ctx.fillRect(-4, -5, 8, 8);        // корпус
+    ctx.fillStyle = '#12181c';                                    // решётка микрофона
+    for (let i = 0; i < 3; i++) ctx.fillRect(-3, -4 + i * 2, 6, 1);
+    const lv = Math.max(0, Math.min(1, it.level || 0));           // столбик уровня
+    ctx.fillStyle = '#1e2a24'; ctx.fillRect(-3.6, -3.2, 1, 6.4);
+    ctx.fillStyle = lv > 0.66 ? '#ff6a5a' : lv > 0.33 ? '#e0c043' : '#43e07a';
+    ctx.fillRect(-3.6, 3.2 - lv * 6.4, 1, lv * 6.4);
   }
   ctx.restore();
 }

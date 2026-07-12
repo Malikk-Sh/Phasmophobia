@@ -505,6 +505,13 @@ export const audio = {
     setTimeout(() => started && noise({ dur: 0.5, type: 'bandpass', freq: 1400, q: 2, gain: 0.04 }), 500);
   },
 
+  sensorPing(pan = 0) {
+    if (!this.ready) return;
+    if (playSample('sensor.ping', { gain: 0.4, pan })) return;
+    tone({ type: 'square', freq: 1650, dur: 0.05, gain: 0.05, pan, attack: 0.002 });
+    tone({ type: 'sine', freq: 2500, dur: 0.04, gain: 0.02, pan, attack: 0.002 });
+  },
+
   switchClick() { if (this.ready && !playSample('switch.click', { gain: 0.45 })) noise({ dur: 0.04, type: 'highpass', freq: 1800, gain: 0.12 }); },
   uiClick() { if (this.ready && !playSample('ui.click', { gain: 0.35 })) tone({ type: 'sine', freq: 660, dur: 0.05, gain: 0.05 }); },
 

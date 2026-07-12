@@ -148,6 +148,8 @@ export class Lighting {
       if (it.floor !== player.floor) continue;
       if (it.type === 'camera') this.punch(it.x, it.y, TILE * 0.8, 0.3);
       if (it.type === 'dots') this.punch(it.x, it.y, TILE * 2.6, 0.28 * fl);
+      if (it.type === 'motion') this.punch(it.x, it.y, TILE * (1 + (it.tripT || 0)), 0.26 + (it.tripT || 0) * 0.25);
+      if (it.type === 'sound') this.punch(it.x, it.y, TILE * (0.9 + (it.level || 0) * 1.2), 0.24 + (it.level || 0) * 0.2);
     }
 
     // проклятый предмет тлеет в темноте

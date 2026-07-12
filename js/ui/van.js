@@ -110,10 +110,25 @@ export const van = {
     const sanity = Math.round(g.player.sanity);
     const activity = gh ? gh.activity : 0;
     const actBar = '█'.repeat(Math.round(activity)) + '░'.repeat(10 - Math.round(activity));
+    // датчики движения/звука
+    const motions = g.world.placed.filter(p => p.type === 'motion');
+    const sounds = g.world.placed.filter(p => p.type === 'sound');
+    let extra = '';
+    if (motions.length) {
+      const tripped = motions.filter(p => (p.tripT || 0) > 0.01).length;
+      extra += `<br>ДВИЖЕНИЕ: <b>${tripped
+        ? `<span style="color:#ff6a5a">● ${tripped}/${motions.length}</span>`
+        : `○ 0/${motions.length}`}</b>`;
+    }
+    if (sounds.length) {
+      const lvl = Math.max(...sounds.map(p => p.level || 0));
+      const bars = Math.round(lvl * 10);
+      extra += `<br>ЗВУК: <b>${'█'.repeat(bars)}${'░'.repeat(10 - bars)}</b>`;
+    }
     meters.innerHTML =
       `РАССУДОК: <b>${sanity}%</b><br>` +
       `АКТИВНОСТЬ: <b>${actBar}</b> ${activity.toFixed(0)}<br>` +
       `ЭЛЕКТРОЩИТОК: <b>${g.world.breaker.on ? 'ВКЛ' : '<span style="color:#d86a5a">ВЫКЛ</span>'}</b><br>` +
-      `КАМЕРЫ: <b>${cams.length}</b>`;
+      `КАМЕРЫ: <b>${cams.length}</b>` + extra;
   },
 };
