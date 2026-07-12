@@ -1142,8 +1142,9 @@ export class Ghost {
       ctx.save();
       ctx.translate(this.x, this.y);
       ctx.fillStyle = `rgba(90,255,140,${a})`;
+      const drift = Math.sin(t * 1.3) * 4; // силуэт медленно дрейфует, а не стоит
       for (let i = 0; i < 26; i++) {
-        const px = Math.sin(i * 2.4 + t * 3) * 8;
+        const px = Math.sin(i * 2.4 + t * 3) * 8 + drift;
         const py = -14 + i * 1.2 + Math.sin(i + t * 6) * 2;
         ctx.fillRect(px, py, 1.6, 1.6);
       }
@@ -1156,79 +1157,167 @@ export class Ghost {
 
     const alpha = this.visibleAlpha;
     if (alpha < 0.02) return;
+    const pl = game.player;
+    const hunt = this.state === 'hunt';
+    const chase = this.huntPhase === 'chase';
+    const dist = pl.floor === this.floor ? Math.hypot(pl.x - this.x, pl.y - this.y) : 1e9;
+    // смотрит ли игрок прямо на призрака — это провоцирует «глитч» силуэта
+    const aTo = Math.atan2(this.y - pl.y, this.x - pl.x);
+    const looked = pl.floor === this.floor && dist < TILE * 7 &&
+      Math.abs(((aTo - pl.angle + Math.PI * 3) % (Math.PI * 2)) - Math.PI) < 0.5;
+
     ctx.save();
-    ctx.translate(this.x, this.y);
+    // дрожание всего силуэта: в охоте сильнее, при взгляде — заметно
+    const jit = hunt ? 2.2 : (looked ? 1.2 : 0.5);
+    ctx.translate(this.x + (Math.random() - 0.5) * jit, this.y + (Math.random() - 0.5) * jit);
     ctx.globalAlpha = alpha;
     const sway = Math.sin(this.sway * 1.7) * 2.4;
 
-    // аура-почерк: у каждой сущности свой холодный оттенок
+    // аура-почерк: у каждой сущности свой холодный оттенок; пульсирует,
+    // в охоте наливается кроваво-красным и расширяется в такт «сердцу»
     const AURA = {
       banshee: '138,42,58', demon: '122,26,26', mare: '20,20,40',
       phantom: '58,74,106', poltergeist: '90,74,26', yurei: '42,74,74',
       wraith: '74,90,106', onryo: '106,42,26',
     };
-    const auraCol = AURA[this.data.key] || '58,64,82';
-    const ag = ctx.createRadialGradient(0, -6, 3, 0, -4, 26);
-    ag.addColorStop(0, `rgba(${auraCol},0.34)`);
+    const auraCol = hunt ? '150,20,20' : (AURA[this.data.key] || '58,64,82');
+    const pulse = 0.3 + Math.sin(t * (hunt ? 7 : 2.2)) * (hunt ? 0.22 : 0.1);
+    const auraR = 26 * (1 + (hunt ? 0.22 : 0.07) * Math.sin(t * (hunt ? 6 : 1.8)));
+    const ag = ctx.createRadialGradient(0, -6, 3, 0, -4, auraR);
+    ag.addColorStop(0, `rgba(${auraCol},${clamp(pulse, 0, 0.6)})`);
     ag.addColorStop(1, `rgba(${auraCol},0)`);
     ctx.fillStyle = ag;
-    ctx.beginPath(); ctx.arc(0, -4, 26, 0, 7); ctx.fill();
+    ctx.beginPath(); ctx.arc(0, -4, auraR, 0, 7); ctx.fill();
 
+    // формы крупнее (~1.3×) и детальнее
+    ctx.save();
+    ctx.scale(1.3, 1.3);
     if (this.form === 'shadow') {
+      // дымные клочья по контуру
+      ctx.fillStyle = 'rgba(6,6,12,.5)';
+      for (let i = 0; i < 5; i++) {
+        const a = i / 5 * 6.28 + t * 0.6;
+        const wx = sway * 0.4 + Math.cos(a) * 11 + Math.sin(t * 2 + i) * 2;
+        const wy = -6 + Math.sin(a) * 17;
+        ctx.beginPath(); ctx.arc(wx, wy, 4 + Math.sin(t * 3 + i) * 1.5, 0, 7); ctx.fill();
+      }
       const g = ctx.createRadialGradient(0, -6, 2, 0, -4, 22);
-      g.addColorStop(0, 'rgba(5,5,10,.95)');
-      g.addColorStop(0.7, 'rgba(5,5,12,.75)');
+      g.addColorStop(0, 'rgba(3,3,7,.98)');
+      g.addColorStop(0.7, 'rgba(5,5,12,.8)');
       g.addColorStop(1, 'rgba(5,5,12,0)');
       ctx.fillStyle = g;
-      ctx.beginPath(); ctx.ellipse(sway * 0.4, -4, 12, 20, 0, 0, 7); ctx.fill();
-      ctx.fillStyle = 'rgba(2,2,6,.9)';
-      ctx.beginPath(); ctx.arc(sway * 0.6, -14, 5.5, 0, 7); ctx.fill();
+      ctx.beginPath(); ctx.ellipse(sway * 0.4, -4, 12, 21, 0, 0, 7); ctx.fill();
+      ctx.fillStyle = 'rgba(1,1,5,.95)';
+      ctx.beginPath(); ctx.arc(sway * 0.6, -15, 6, 0, 7); ctx.fill();
+      // тянущаяся рука в охоте
+      if (hunt) {
+        ctx.strokeStyle = 'rgba(2,2,8,.9)'; ctx.lineWidth = 3;
+        const reach = 6 + Math.sin(t * 5) * 4;
+        ctx.beginPath(); ctx.moveTo(sway * 0.4, -6);
+        ctx.lineTo(Math.cos(aTo / 1.3) * (10 + reach), -2 + Math.sin(t * 4) * 3); ctx.stroke();
+      }
+      // белые точки-глаза при близости игрока
+      if (dist < TILE * 4 || hunt) {
+        const eg = 0.5 + Math.sin(t * 4) * 0.3;
+        ctx.fillStyle = `rgba(220,235,255,${eg})`;
+        ctx.beginPath(); ctx.arc(sway * 0.6 - 2, -15.5, 1.1, 0, 7); ctx.arc(sway * 0.6 + 2, -15.5, 1.1, 0, 7); ctx.fill();
+      }
     } else if (this.form === 'lady') {
-      // платье
-      const g = ctx.createLinearGradient(0, -18, 0, 12);
-      g.addColorStop(0, 'rgba(210,225,240,.85)');
-      g.addColorStop(1, 'rgba(160,180,205,.05)');
+      // платье с рваным подолом
+      const g = ctx.createLinearGradient(0, -18, 0, 14);
+      g.addColorStop(0, 'rgba(214,228,242,.9)');
+      g.addColorStop(1, 'rgba(150,172,200,.05)');
       ctx.fillStyle = g;
       ctx.beginPath();
-      ctx.moveTo(sway - 4, -14);
-      ctx.quadraticCurveTo(-13 + sway, 2, -9, 12);
-      ctx.quadraticCurveTo(0, 8, 9, 12);
-      ctx.quadraticCurveTo(13 + sway, 2, sway + 4, -14);
+      ctx.moveTo(sway - 5, -15);
+      ctx.quadraticCurveTo(-14 + sway, 2, -11, 12);
+      // зубчатый истлевший край
+      for (let i = 0; i <= 6; i++) {
+        const hx = -11 + i * (22 / 6);
+        const hy = 12 + (i % 2 ? 3 : -1) + Math.sin(t * 3 + i) * 1.2;
+        ctx.lineTo(hx, hy);
+      }
+      ctx.quadraticCurveTo(14 + sway, 2, sway + 5, -15);
       ctx.closePath(); ctx.fill();
-      // голова и волосы
-      ctx.fillStyle = 'rgba(225,235,245,.9)';
-      ctx.beginPath(); ctx.arc(sway, -17, 5, 0, 7); ctx.fill();
-      ctx.fillStyle = 'rgba(30,35,45,.85)';
+      // длинные свисающие руки
+      ctx.strokeStyle = 'rgba(205,220,235,.6)'; ctx.lineWidth = 2;
       ctx.beginPath();
-      ctx.ellipse(sway, -19, 6, 4.5, 0, Math.PI, 0);
-      ctx.quadraticCurveTo(sway + 7, -10, sway + 4, -6);
-      ctx.lineTo(sway - 4, -6);
-      ctx.quadraticCurveTo(sway - 7, -10, sway - 6, -19);
+      ctx.moveTo(sway - 5, -10); ctx.quadraticCurveTo(-11, 0, -9 + Math.sin(t * 2) * 1.5, 8);
+      ctx.moveTo(sway + 5, -10); ctx.quadraticCurveTo(11, 0, 9 + Math.sin(t * 2 + 1) * 1.5, 8);
+      ctx.stroke();
+      // пальцы
+      ctx.lineWidth = 1;
+      for (const sx of [-9, 9]) for (let f = -1; f <= 1; f++) {
+        ctx.beginPath(); ctx.moveTo(sx, 8); ctx.lineTo(sx + f * 1.5, 12); ctx.stroke();
+      }
+      // голова, пряди волос
+      ctx.fillStyle = 'rgba(228,238,248,.92)';
+      ctx.beginPath(); ctx.arc(sway, -18, 5.2, 0, 7); ctx.fill();
+      ctx.fillStyle = 'rgba(24,28,38,.9)';
+      ctx.beginPath();
+      ctx.ellipse(sway, -20, 6.4, 4.8, 0, Math.PI, 0);
+      ctx.quadraticCurveTo(sway + 8, -9, sway + 5, -4);
+      ctx.lineTo(sway + 3, -6);
+      ctx.quadraticCurveTo(sway + 4, -12, sway - 4, -12);
+      ctx.quadraticCurveTo(sway - 4, -9, sway - 5, -4);
+      ctx.quadraticCurveTo(sway - 8, -9, sway - 6, -20);
       ctx.fill();
-      // глаза-провалы
-      ctx.fillStyle = 'rgba(10,10,16,.95)';
-      ctx.beginPath(); ctx.arc(sway - 1.8, -17, 1, 0, 7); ctx.arc(sway + 1.8, -17, 1, 0, 7); ctx.fill();
-    } else { // hangman
-      ctx.strokeStyle = 'rgba(120,130,145,.5)';
-      ctx.lineWidth = 1.2;
-      ctx.beginPath(); ctx.moveTo(0, -30); ctx.lineTo(0, -22); ctx.stroke(); // верёвка
-      const g = ctx.createLinearGradient(0, -20, 0, 10);
-      g.addColorStop(0, 'rgba(150,160,175,.8)');
+      // тёмные глазницы + приоткрытый рот
+      ctx.fillStyle = 'rgba(6,6,12,.96)';
+      ctx.beginPath(); ctx.ellipse(sway - 1.9, -18, 1.3, 1.7, 0, 0, 7); ctx.ellipse(sway + 1.9, -18, 1.3, 1.7, 0, 0, 7); ctx.fill();
+      ctx.beginPath(); ctx.ellipse(sway, -14.2, 1, 1.4 + Math.sin(t * 3) * 0.4, 0, 0, 7); ctx.fill();
+    } else { // hangman — покачивается на верёвке
+        const swingA = Math.sin(t * 1.1) * 0.14; // качание вокруг точки подвеса
+      ctx.strokeStyle = 'rgba(120,130,145,.55)'; ctx.lineWidth = 1.3;
+      ctx.beginPath(); ctx.moveTo(0, -32); ctx.lineTo(Math.sin(swingA) * 22, -22); ctx.stroke(); // верёвка
+      ctx.save();
+      ctx.translate(0, -22); ctx.rotate(swingA); ctx.translate(0, 22); // качение всего тела
+      const g = ctx.createLinearGradient(0, -20, 0, 12);
+      g.addColorStop(0, 'rgba(154,164,178,.85)');
       g.addColorStop(1, 'rgba(110,120,140,.05)');
       ctx.fillStyle = g;
-      ctx.beginPath(); ctx.ellipse(sway * 0.4, -6, 8, 15, sway * 0.02, 0, 7); ctx.fill();
-      // склонённая голова
-      ctx.fillStyle = 'rgba(170,180,190,.85)';
-      ctx.save();
-      ctx.translate(sway * 0.5 + 2, -18);
-      ctx.rotate(0.55 + sway * 0.01);
-      ctx.beginPath(); ctx.ellipse(0, 0, 4.4, 5.2, 0, 0, 7); ctx.fill();
+      ctx.beginPath(); ctx.ellipse(0, -6, 8, 16, 0, 0, 7); ctx.fill();
+      // запрокинутая голова + петля на шее
+      ctx.fillStyle = 'rgba(174,184,194,.88)';
+      ctx.save(); ctx.translate(1.5, -19); ctx.rotate(0.5);
+      ctx.beginPath(); ctx.ellipse(0, 0, 4.6, 5.4, 0, 0, 7); ctx.fill();
+      ctx.fillStyle = 'rgba(6,6,12,.9)'; // выпученные глаза
+      ctx.beginPath(); ctx.arc(-1.4, -0.6, 1.1, 0, 7); ctx.arc(1.4, 0.2, 1.1, 0, 7); ctx.fill();
       ctx.restore();
-      // болтающиеся ноги
-      ctx.strokeStyle = 'rgba(120,130,150,.5)';
-      ctx.lineWidth = 2.5;
-      ctx.beginPath(); ctx.moveTo(-3, 6); ctx.lineTo(-3 + sway * 0.5, 14);
-      ctx.moveTo(3, 6); ctx.lineTo(3 + sway * 0.4, 14); ctx.stroke();
+      ctx.strokeStyle = 'rgba(40,40,48,.7)'; ctx.lineWidth = 1.4;
+      ctx.beginPath(); ctx.arc(1.5, -14.5, 3, 0, 7); ctx.stroke(); // петля
+      // подёргивающиеся ноги
+      const twitch = Math.sin(t * 9) * (Math.random() < 0.1 ? 3 : 1);
+      ctx.strokeStyle = 'rgba(120,130,150,.55)'; ctx.lineWidth = 2.5;
+      ctx.beginPath(); ctx.moveTo(-3, 8); ctx.lineTo(-3 + twitch * 0.5, 16);
+      ctx.moveTo(3, 8); ctx.lineTo(3 - twitch * 0.4, 16); ctx.stroke();
+      ctx.restore();
+    }
+    ctx.restore(); // scale
+
+    // бледное лицо в погоне вблизи — крупный план ужаса поверх силуэта
+    if (hunt && chase && dist < TILE * 5) {
+      const fa = clamp((TILE * 5 - dist) / (TILE * 5), 0, 1) * alpha;
+      ctx.globalAlpha = fa;
+      const fy = -20 + Math.sin(t * 20) * 1.5;
+      const fg = ctx.createRadialGradient(0, fy, 1, 0, fy, 9);
+      fg.addColorStop(0, 'rgba(216,220,224,.95)'); fg.addColorStop(0.7, 'rgba(150,158,165,.7)'); fg.addColorStop(1, 'rgba(150,158,165,0)');
+      ctx.fillStyle = fg; ctx.beginPath(); ctx.ellipse(0, fy, 6, 8, 0, 0, 7); ctx.fill();
+      ctx.fillStyle = 'rgba(2,2,4,.95)';
+      ctx.beginPath(); ctx.ellipse(-2.2, fy - 1, 1.4, 2, 0, 0, 7); ctx.ellipse(2.2, fy - 1, 1.4, 2, 0, 0, 7); ctx.fill();
+      ctx.beginPath(); ctx.ellipse(0, fy + 4, 1.5, 2.6 + Math.sin(t * 12) * 0.8, 0, 0, 7); ctx.fill(); // орущий рот
+      ctx.globalAlpha = alpha;
+    }
+
+    // глитч-срезы, когда игрок смотрит прямо на призрака: сигнал «рвётся»
+    if (looked && Math.random() < (hunt ? 0.5 : 0.16)) {
+      ctx.globalAlpha = alpha * 0.6;
+      for (let i = 0; i < 3; i++) {
+        const sy = -20 + Math.random() * 28;
+        const off = (Math.random() - 0.5) * 8;
+        ctx.fillStyle = i === 0 ? 'rgba(0,220,220,.5)' : i === 1 ? 'rgba(220,0,60,.5)' : `rgba(${auraCol},.6)`;
+        ctx.fillRect(-9 + off, sy, 18, 1.6 + Math.random() * 2);
+      }
     }
     ctx.restore();
   }
