@@ -123,8 +123,8 @@ export class Renderer {
       c.beginPath(); c.ellipse(b.x, b.y, b.r, b.r * 0.85, 0, 0, 7); c.fill();
     }
 
-    // мебель первого этажа
-    for (const f of this.world.furniture[0]) drawFurnitureItem(c, f);
+    // мебель первого этажа (подвижная рисуется покадрово в drawScene)
+    for (const f of this.world.furniture[0]) if (!f.movable) drawFurnitureItem(c, f);
 
     // фургон
     this.paintVan(c);
@@ -156,7 +156,7 @@ export class Renderer {
     this.paintThresholds(c, FLOOR_BASEMENT);
     this.paintDetails(c, FLOOR_BASEMENT, rng);
     this.paintStairs(c, FLOOR_BASEMENT);
-    for (const f of this.world.furniture[FLOOR_BASEMENT]) drawFurnitureItem(c, f);
+    for (const f of this.world.furniture[FLOOR_BASEMENT]) if (!f.movable) drawFurnitureItem(c, f);
     return cv;
   }
 
@@ -541,6 +541,9 @@ export class Renderer {
     // статика
     ctx.drawImage(this.static[floor], 0, 0);
 
+    // подвижная мебель: не запечена в статику; трясётся, когда призрак её дёргает
+    this.drawMovableFurniture(ctx, world, floor, t);
+
     // тёплое свечение включённых ламп (под слоем тьмы)
     if (world.breaker.on) {
       for (const room of world.rooms) {
@@ -665,6 +668,21 @@ export class Renderer {
         }
         ctx.closePath(); ctx.fill();
       }
+    }
+  }
+
+  drawMovableFurniture(ctx, world, floor, t) {
+    for (const f of world.furniture[floor] || []) {
+      if (!f.movable) continue;
+      if (f.shakeT > 0) {
+        const amp = (f.shakeAmp || 1.4) * (f.shakeT / (f.shakeDur || 1));
+        ctx.save();
+        ctx.translate(
+          Math.sin(t * 43 + f.id * 2.7) * amp,
+          Math.cos(t * 51 + f.id * 1.9) * amp * 0.6);
+        drawFurnitureItem(ctx, f);
+        ctx.restore();
+      } else drawFurnitureItem(ctx, f);
     }
   }
 
@@ -888,7 +906,8 @@ export class Renderer {
     const k = cv.width / viewW;
     c.save();
     c.setTransform(k, 0, 0, k, -sx * k, -sy * k);
-    // двери и пропсы в кадре
+    // мебель (подвижная), двери и пропсы в кадре
+    this.drawMovableFurniture(c, game.world, cam.floor, game.time);
     for (const d of game.world.doors) if (d.floor === cam.floor) this.drawDoor(c, d);
     for (const p of game.world.props) if (p.floor === cam.floor) drawProp(c, p);
     // огоньки-орбы (только через камеру!)

@@ -505,6 +505,23 @@ export const audio = {
     setTimeout(() => started && noise({ dur: 0.5, type: 'bandpass', freq: 1400, q: 2, gain: 0.04 }), 500);
   },
 
+  // Скрежет мебели по полу: ножки дерут доски, тяжёлая версия ниже и дольше
+  furnitureScrape(pan = 0, heavy = false) {
+    if (!this.ready) return;
+    if (playSample('furniture.scrape', { gain: heavy ? 0.6 : 0.45, pan, rate: sampleGain(heavy ? 0.82 : 1, 0.1) })) return;
+    const dur = (heavy ? 0.55 : 0.34) + Math.random() * 0.2;
+    tone({
+      type: 'sawtooth', freq: heavy ? 62 : 104, slide: heavy ? 92 : 150,
+      dur, gain: heavy ? 0.05 : 0.034, vib: 24, vibRate: 8.5, pan, attack: 0.02,
+    });
+    noise({ dur, type: 'bandpass', freq: heavy ? 300 : 520, q: 2.5, gain: 0.05, pan, attack: 0.02, rate: 0.75 });
+    noise({ dur: dur * 0.6, type: 'highpass', freq: 1900, gain: 0.018, pan, attack: 0.04 }); // сухое трение
+    // короткий «дострел» — мебель довернулась
+    if (Math.random() < 0.45) setTimeout(() => started && noise({
+      dur: 0.09, type: 'bandpass', freq: 420, q: 3, gain: 0.04, pan, attack: 0.005,
+    }), dur * 1000 + 90);
+  },
+
   sensorPing(pan = 0) {
     if (!this.ready) return;
     if (playSample('sensor.ping', { gain: 0.4, pan })) return;

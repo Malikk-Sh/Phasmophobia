@@ -139,6 +139,7 @@ export class Ghost {
           if (this.stormT <= 0) {
             this.stormT = 0.35;
             this.interactProp(game);
+            if (Math.random() < 0.18) this.shoveFurniture(game, { strong: true });
             game.fx.dustBurst(this.x + rndRange(-30, 30), this.y + rndRange(-30, 30), this.floor);
           }
         } else if (type === 'doorFury') {
@@ -282,11 +283,13 @@ export class Ghost {
       case 'suspicion': {
         // возня и слабые показания приборов рядом с игроком
         const r = Math.random();
-        if (r < 0.4 && dir?.allow('prop', 10, game)) {
+        if (r < 0.35 && dir?.allow('prop', 10, game)) {
           this.interactProp(game);
           dir?.note('prop', game);
-        } else if (r < 0.6) this.tryWrite(game);
-        else if (r < 0.75 && dir?.allow('switch', 15, game)) {
+        } else if (r < 0.5 && dir?.allow('shove', 16, game) && this.shoveFurniture(game)) {
+          dir?.note('shove', game);
+        } else if (r < 0.65) this.tryWrite(game);
+        else if (r < 0.78 && dir?.allow('switch', 15, game)) {
           this.interactSwitch(game);
           dir?.note('switch', game);
         } else if (this.tr.teleport && Math.random() < 0.4) {
@@ -426,8 +429,10 @@ export class Ghost {
       case 'phantom': // неподвижный исчезающий силуэт
         if (canDanger && playerNear) { this.startEvent(game, 'silhouette'); return true; }
         return this.doAmbient(game, playerNear);
-      case 'poltergeist': // серия бросков
-        this.interactProp(game); if (Math.random() < 0.5) this.interactProp(game); return true;
+      case 'poltergeist': // серия бросков + может двинуть мебель
+        this.interactProp(game); if (Math.random() < 0.5) this.interactProp(game);
+        if (Math.random() < 0.6) this.shoveFurniture(game, { strong: true });
+        return true;
       case 'banshee': // узнаваемый вой + выход показаться
         audio.bansheeWail();
         if (canDanger && Math.random() < 0.6) { this.startEvent(game, 'manifest'); }
@@ -582,6 +587,54 @@ export class Ghost {
       throwOne(rndPick(props));
       this.emitEMF(Math.random() < 0.5 ? 2 : 3);
     }
+  }
+
+  // Толчок мебели: тряска + сдвиг со скрежетом по полу. Коллайдер едет вместе
+  // с мебелью; дверные проёмы и стены не перекрываются. Возвращает успех.
+  shoveFurniture(game, { strong = false } = {}) {
+    const list = (this.world.furniture[this.floor] || []).filter(f =>
+      f.movable && Math.hypot(f.x + f.w / 2 - this.x, f.y + f.h / 2 - this.y) < TILE * 6);
+    if (!list.length) return false;
+    const pl = game.player;
+    const n = strong && this.tr.multiThrow ? 1 + (Math.random() * 2 | 0) : 1;
+    let done = 0;
+    for (let i = 0; i < n && list.length; i++) {
+      const f = list.splice((Math.random() * list.length) | 0, 1)[0];
+      f.shakeDur = rndRange(0.7, 1.3);
+      f.shakeT = f.shakeDur;
+      f.shakeAmp = strong ? 2.4 : 1.4;
+      const dist = (strong ? rndRange(10, 18) : rndRange(4, 10)) * (this.tr.throwMult ? 1.6 : 1);
+      const dirs = [0, Math.PI / 2, Math.PI, -Math.PI / 2].sort(() => Math.random() - 0.5);
+      for (const a of dirs) {
+        const dx = Math.cos(a) * dist, dy = Math.sin(a) * dist;
+        if (this.canShiftFurniture(f, dx, dy)) {
+          f.x += dx; f.y += dy;
+          if (f.colliderRef) { f.colliderRef.x = f.x; f.colliderRef.y = f.y; }
+          break;
+        }
+      }
+      audio.furnitureScrape(audio.panFor(f.x + f.w / 2), f.w * f.h > TILE * TILE * 1.1);
+      done++;
+    }
+    if (!done) return false;
+    this.emitEMF(2);
+    this.activity = Math.min(10, this.activity + 1);
+    if (pl.floor === this.floor && Math.hypot(pl.x - this.x, pl.y - this.y) < TILE * 8) {
+      game.camera.shake(1.1, 0.35);
+    }
+    game.markEventWitnessed?.('knock', { x: this.x, y: this.y, floor: this.floor });
+    return true;
+  }
+
+  canShiftFurniture(f, dx, dy) {
+    const g = this.world.floors[f.floor];
+    const x1 = f.x + dx, y1 = f.y + dy;
+    for (const [cx, cy] of [[x1, y1], [x1 + f.w, y1], [x1, y1 + f.h], [x1 + f.w, y1 + f.h]]) {
+      const tx = Math.floor(cx / TILE), ty = Math.floor(cy / TILE);
+      if (g.isSolid(tx, ty)) return false;
+      if (this.world.doorAt(f.floor, tx, ty)) return false; // не блокировать проёмы
+    }
+    return true;
   }
 
   interactDoor(game) {

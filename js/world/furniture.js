@@ -4,6 +4,14 @@
 import { TILE } from '../core/utils.js';
 import { FLOOR_BASEMENT } from './house.js';
 
+// Подвижная мебель: призрак может трясти и сдвигать её (лёгкие предметы и
+// ковры). Крупное, высокое (tall — окклюдеры света) и укрытия — статичны.
+const MOVABLE = new Set([
+  'chair', 'oldchair', 'nightstand', 'coffeeTable', 'basket', 'crate',
+  'toychest', 'plant', 'tires', 'console', 'floorlamp',
+  'rugRect', 'rugRound', 'runner',
+]);
+
 // ---------- Расстановка ----------
 export function furnish(world, blueprint) {
   const bp = blueprint;
@@ -21,9 +29,15 @@ export function furnish(world, blueprint) {
       rot: opts.rot || 0, tall: !!opts.tall, hide: !!opts.hide,
       solid: opts.solid !== false,
       name: opts.name || '',
+      movable: MOVABLE.has(type) && !opts.tall && !opts.hide,
+      shakeT: 0, shakeDur: 1, shakeAmp: 0,
     };
     F[floor].push(f);
-    if (f.solid) colliders[floor].push({ x: f.x, y: f.y, w: f.w, h: f.h });
+    if (f.solid) {
+      const c = { x: f.x, y: f.y, w: f.w, h: f.h };
+      colliders[floor].push(c);
+      f.colliderRef = c; // при сдвиге мебели коллайдер двигается вместе с ней
+    }
     if (f.tall) {
       tallOccluders[floor].push(
         { x1: f.x, y1: f.y, x2: f.x + f.w, y2: f.y },
@@ -400,6 +414,24 @@ const DRAW = {
     ctx.strokeStyle = '#2c2214'; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(0, 0, w * .34, 0, 7); ctx.stroke();
   },
   oldchair(ctx, w, h) { DRAW.chair(ctx, w, h); ctx.fillStyle = 'rgba(0,0,0,.25)'; rr(ctx, -w / 4, -h / 4, w / 2, h / 2, 2); ctx.fill(); },
+  floorlamp(ctx, w) {
+    // торшер сверху: абажур с тёплым свечением ткани, спицы, стержень
+    ctx.fillStyle = 'rgba(0,0,0,.35)';
+    ctx.beginPath(); ctx.arc(2, 3, w * 0.46, 0, 7); ctx.fill();
+    const g = ctx.createRadialGradient(0, 0, 1, 0, 0, w * 0.46);
+    g.addColorStop(0, '#c9a86a'); g.addColorStop(0.55, '#8a6f42'); g.addColorStop(1, '#4c3c22');
+    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(0, 0, w * 0.44, 0, 7); ctx.fill();
+    ctx.strokeStyle = 'rgba(30,22,12,.55)'; ctx.lineWidth = 1;
+    for (let i = 0; i < 6; i++) { // спицы абажура
+      const a = i / 6 * Math.PI * 2 + 0.3;
+      ctx.beginPath(); ctx.moveTo(Math.cos(a) * w * 0.1, Math.sin(a) * w * 0.1);
+      ctx.lineTo(Math.cos(a) * w * 0.42, Math.sin(a) * w * 0.42); ctx.stroke();
+    }
+    ctx.beginPath(); ctx.arc(0, 0, w * 0.44, 0, 7); ctx.stroke(); // обод
+    ctx.fillStyle = '#2c2418'; ctx.beginPath(); ctx.arc(0, 0, w * 0.09, 0, 7); ctx.fill(); // стержень
+    ctx.fillStyle = 'rgba(255,235,190,.5)'; // тёплый отсвет ткани
+    ctx.beginPath(); ctx.arc(-w * 0.13, -w * 0.13, w * 0.12, 0, 7); ctx.fill();
+  },
 };
 
 export function drawFurnitureItem(ctx, f) {

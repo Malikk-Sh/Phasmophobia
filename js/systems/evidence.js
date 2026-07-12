@@ -122,6 +122,13 @@ export const worldSim = {
       }
     }
 
+    // затухание тряски подвижной мебели
+    for (const key of [0, -1]) {
+      for (const f of world.furniture[key] || []) {
+        if (f.shakeT > 0) f.shakeT = Math.max(0, f.shakeT - dt);
+      }
+    }
+
     // двери: плавный поворот
     for (const d of world.doors) {
       const target = d.targetSwing ?? (d.open ? 1 : 0);
