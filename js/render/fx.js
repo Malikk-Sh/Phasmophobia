@@ -267,59 +267,138 @@ export class FX {
       const t = 3.4 - game.deathT;
       ctx.fillStyle = `rgba(0,0,0,${clamp(t * 1.5, 0, t > 2.55 ? 1 : 0.88)})`;
       ctx.fillRect(0, 0, w, h);
-      if (game.deathFace > 0 && t < 2.55) this.drawDeathFace(ctx, w, h, clamp((t - 1.15) / 1.3, 0, 1));
+      if (game.deathFace > 0 && t < 2.55) {
+        this.drawDeathFace(ctx, w, h, clamp((t - 1.15) / 1.3, 0, 1),
+          game.deathVariant || 0, game.deathChoreo || 0, t);
+      }
     } else if (game.state === 'dead') {
       ctx.fillStyle = '#000';
       ctx.fillRect(0, 0, w, h);
     }
   }
 
-  drawDeathFace(ctx, w, h, k) {
-    const scale = 0.72 + k * 1.0;
-    const a = Math.min(1, k * 8);
-    const jx = (Math.random() - 0.5) * 10, jy = (Math.random() - 0.5) * 10;
+  // Скример: 4 варианта лица × 3 хореографии наезда. variant по форме призрака,
+  // choreo — как лицо надвигается (наезд / стробоскоп / вплытие с рывком).
+  drawDeathFace(ctx, w, h, k, variant = 0, choreo = 0, t = 0) {
+    let cx = w / 2, cy = h / 2, scale = 0.72 + k * 1.0, a = Math.min(1, k * 8);
+    if (choreo === 1) {
+      // стробоскоп: лицо скачет ступенями ближе, между «кадрами» гаснет
+      const step = Math.floor(k * 4);
+      scale = 0.6 + step * 0.32;
+      const strobe = Math.sin(t * 34);
+      a *= strobe > -0.2 ? 1 : 0.15;
+    } else if (choreo === 2) {
+      // вплывает с края и в конце делает рывок в лицо
+      const side = (variant % 2) ? 1 : -1;
+      cx = w / 2 + side * (1 - k) * w * 0.42;
+      cy = h / 2 + (variant % 3 - 1) * (1 - k) * h * 0.18;
+      scale = 0.6 + k * (k > 0.8 ? 1.6 : 0.9);
+    }
+    const jAmp = (choreo === 1 ? 6 : 10) * (0.5 + k);
     ctx.save();
-    ctx.translate(w / 2 + jx, h / 2 + jy);
+    ctx.translate(cx + (Math.random() - 0.5) * jAmp, cy + (Math.random() - 0.5) * jAmp);
     ctx.scale(scale, scale);
     ctx.globalAlpha = a;
     const R = h * 0.34;
-    // мертвенно-бледное лицо
+
+    if (variant === 2) this.faceShadow(ctx, R, k, t);
+    else if (variant === 1) this.faceLady(ctx, R, k, t);
+    else if (variant === 3) this.faceHangman(ctx, R, k, t);
+    else this.faceGaunt(ctx, R, k, t);
+    ctx.restore();
+  }
+
+  // базовое мертвенно-бледное лицо (общая заготовка)
+  paleOval(ctx, R, tint = '208,212,216') {
     const fg = ctx.createRadialGradient(0, -R * 0.1, R * 0.18, 0, 0, R);
-    fg.addColorStop(0, 'rgba(208,212,216,.96)');
+    fg.addColorStop(0, `rgba(${tint},.96)`);
     fg.addColorStop(0.7, 'rgba(150,158,165,.85)');
     fg.addColorStop(1, 'rgba(60,66,72,0)');
     ctx.fillStyle = fg;
     ctx.beginPath(); ctx.ellipse(0, 0, R * 0.62, R * 0.88, 0, 0, 7); ctx.fill();
-    // провалы глазниц
+  }
+  eyePit(ctx, x, y, rx, ry, rot = 0) {
+    const eg = ctx.createRadialGradient(x, y, 1, x, y, Math.max(rx, ry) * 1.5);
+    eg.addColorStop(0, 'rgba(2,2,4,1)'); eg.addColorStop(0.7, 'rgba(4,4,8,.95)'); eg.addColorStop(1, 'rgba(10,10,14,0)');
+    ctx.fillStyle = eg; ctx.beginPath(); ctx.ellipse(x, y, rx, ry, rot, 0, 7); ctx.fill();
+  }
+  maw(ctx, x, y, rx, ry) {
+    const mg = ctx.createRadialGradient(x, y, 2, x, y, Math.max(rx, ry) * 1.1);
+    mg.addColorStop(0, 'rgba(1,1,2,1)'); mg.addColorStop(0.75, 'rgba(3,3,6,.95)'); mg.addColorStop(1, 'rgba(8,8,12,0)');
+    ctx.fillStyle = mg; ctx.beginPath(); ctx.ellipse(x, y, rx, ry, 0, 0, 7); ctx.fill();
+  }
+
+  // v0 — исхудалое лицо: асимметрия глаз, наклон, зубы, потёки
+  faceGaunt(ctx, R, k, t) {
+    ctx.save(); ctx.rotate(Math.sin(t * 9) * 0.03);
+    this.paleOval(ctx, R);
+    this.eyePit(ctx, -R * 0.26, -R * 0.22, R * 0.17, R * 0.22, 0.25);
+    this.eyePit(ctx, R * 0.24, -R * 0.18, R * 0.15, R * 0.19, -0.15);
+    this.maw(ctx, 0, R * 0.38, R * 0.18, R * 0.36 * (0.6 + k * 0.5));
+    ctx.fillStyle = 'rgba(200,205,208,.85)'; // зубы
+    for (let i = -2; i <= 2; i++) ctx.fillRect(i * R * 0.06 - R * 0.02, R * 0.22, R * 0.04, R * 0.07);
+    ctx.strokeStyle = 'rgba(20,22,28,.55)'; ctx.lineWidth = R * 0.02;
     for (const sx of [-1, 1]) {
-      const eg = ctx.createRadialGradient(sx * R * 0.25, -R * 0.2, 1, sx * R * 0.25, -R * 0.2, R * 0.24);
-      eg.addColorStop(0, 'rgba(2,2,4,1)');
-      eg.addColorStop(0.7, 'rgba(4,4,8,.95)');
-      eg.addColorStop(1, 'rgba(10,10,14,0)');
-      ctx.fillStyle = eg;
-      ctx.beginPath();
-      ctx.ellipse(sx * R * 0.25, -R * 0.2, R * 0.16, R * 0.21, sx * 0.2, 0, 7);
-      ctx.fill();
-    }
-    // разинутый рот
-    const mg = ctx.createRadialGradient(0, R * 0.38, 2, 0, R * 0.38, R * 0.32);
-    mg.addColorStop(0, 'rgba(1,1,2,1)');
-    mg.addColorStop(0.75, 'rgba(3,3,6,.95)');
-    mg.addColorStop(1, 'rgba(8,8,12,0)');
-    ctx.fillStyle = mg;
-    ctx.beginPath();
-    ctx.ellipse(0, R * 0.38, R * 0.17, R * 0.36 * (0.6 + k * 0.5), 0, 0, 7);
-    ctx.fill();
-    // тёмные потёки от глаз
-    ctx.strokeStyle = 'rgba(20,22,28,.55)';
-    ctx.lineWidth = R * 0.02;
-    for (const sx of [-1, 1]) {
-      ctx.beginPath();
-      ctx.moveTo(sx * R * 0.25, -R * 0.02);
-      ctx.quadraticCurveTo(sx * R * 0.28, R * 0.3, sx * R * 0.22, R * 0.55);
-      ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(sx * R * 0.25, -R * 0.02);
+      ctx.quadraticCurveTo(sx * R * 0.28, R * 0.3, sx * R * 0.22, R * 0.55); ctx.stroke();
     }
     ctx.restore();
+  }
+
+  // v1 — женщина: лицо за занавесом волос, один глаз, рот рвётся шире
+  faceLady(ctx, R, k, t) {
+    this.paleOval(ctx, R, '218,226,234');
+    this.eyePit(ctx, -R * 0.24, -R * 0.16, R * 0.16, R * 0.2);
+    this.maw(ctx, R * 0.02, R * 0.34, R * 0.14, R * 0.42 * (0.6 + k * 0.7)); // разрывается вниз
+    // занавес мокрых волос поверх лица
+    ctx.strokeStyle = 'rgba(18,20,28,.9)'; ctx.lineWidth = R * 0.05;
+    for (let i = 0; i <= 12; i++) {
+      const x = -R * 0.55 + i * (R * 1.1 / 12);
+      ctx.beginPath(); ctx.moveTo(x, -R * 0.9);
+      ctx.quadraticCurveTo(x + Math.sin(i + t * 2) * R * 0.05, R * 0.1, x + Math.sin(i * 2) * R * 0.08, R * 0.95);
+      ctx.stroke();
+    }
+    // просвет для одного глаза
+    this.eyePit(ctx, R * 0.22, -R * 0.14, R * 0.1, R * 0.13);
+  }
+
+  // v2 — тень: почти чёрное лицо, белые точки-глаза, зубчатый рот
+  faceShadow(ctx, R, k, t) {
+    const g = ctx.createRadialGradient(0, 0, R * 0.1, 0, 0, R);
+    g.addColorStop(0, 'rgba(8,8,14,.98)'); g.addColorStop(0.7, 'rgba(4,4,10,.95)'); g.addColorStop(1, 'rgba(4,4,10,0)');
+    ctx.fillStyle = g; ctx.beginPath(); ctx.ellipse(0, 0, R * 0.66, R * 0.9, 0, 0, 7); ctx.fill();
+    // белые горящие точки
+    const eg = 0.7 + Math.sin(t * 6) * 0.3;
+    ctx.fillStyle = `rgba(230,240,255,${eg})`;
+    ctx.beginPath(); ctx.arc(-R * 0.24, -R * 0.16, R * 0.05, 0, 7); ctx.arc(R * 0.24, -R * 0.16, R * 0.05, 0, 7); ctx.fill();
+    ctx.fillStyle = `rgba(230,240,255,${eg * 0.25})`;
+    ctx.beginPath(); ctx.arc(-R * 0.24, -R * 0.16, R * 0.11, 0, 7); ctx.arc(R * 0.24, -R * 0.16, R * 0.11, 0, 7); ctx.fill();
+    // зубчатый провал рта
+    ctx.fillStyle = 'rgba(0,0,0,.95)';
+    ctx.beginPath(); ctx.moveTo(-R * 0.22, R * 0.28);
+    for (let i = 0; i <= 8; i++) ctx.lineTo(-R * 0.22 + i * (R * 0.44 / 8), R * 0.28 + (i % 2 ? R * 0.16 : 0) + k * R * 0.14);
+    ctx.lineTo(R * 0.22, R * 0.28); ctx.closePath(); ctx.fill();
+  }
+
+  // v3 — повешенный: запрокинутая голова, петля на шее, выпученные глаза
+  faceHangman(ctx, R, k, t) {
+    ctx.save(); ctx.rotate(0.18 + Math.sin(t * 4) * 0.03); // запрокинута
+    this.paleOval(ctx, R, '196,204,210');
+    // выпученные глаза (выпуклые, не провалы)
+    ctx.fillStyle = 'rgba(214,216,220,.95)';
+    ctx.beginPath(); ctx.ellipse(-R * 0.24, -R * 0.14, R * 0.13, R * 0.15, 0, 0, 7); ctx.ellipse(R * 0.26, -R * 0.12, R * 0.13, R * 0.15, 0, 0, 7); ctx.fill();
+    ctx.fillStyle = 'rgba(80,20,20,.9)';
+    ctx.beginPath(); ctx.arc(-R * 0.24, -R * 0.14, R * 0.06, 0, 7); ctx.arc(R * 0.26, -R * 0.12, R * 0.06, 0, 7); ctx.fill();
+    ctx.fillStyle = 'rgba(4,4,6,1)';
+    ctx.beginPath(); ctx.arc(-R * 0.24, -R * 0.14, R * 0.028, 0, 7); ctx.arc(R * 0.26, -R * 0.12, R * 0.028, 0, 7); ctx.fill();
+    // высунутый язык во рту
+    this.maw(ctx, 0, R * 0.4, R * 0.15, R * 0.28 * (0.7 + k * 0.4));
+    ctx.fillStyle = 'rgba(120,40,44,.8)';
+    ctx.beginPath(); ctx.ellipse(0, R * 0.5, R * 0.07, R * 0.13, 0, 0, 7); ctx.fill();
+    ctx.restore();
+    // петля-верёвка через шею
+    ctx.strokeStyle = 'rgba(60,48,30,.85)'; ctx.lineWidth = R * 0.06;
+    ctx.beginPath(); ctx.arc(0, R * 0.78, R * 0.4, Math.PI * 1.15, Math.PI * 1.85); ctx.stroke();
     ctx.globalAlpha = 1;
   }
 

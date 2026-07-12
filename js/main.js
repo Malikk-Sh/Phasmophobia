@@ -266,6 +266,10 @@ const game = {
     this.deathT = 3.4;
     this.deathFired = {};
     this.deathFace = 0;
+    // вариант скримера (лицо по форме призрака + случайность) и хореография наезда
+    const byForm = { lady: 1, shadow: 2, hangman: 3 };
+    this.deathVariant = Math.random() < 0.2 ? (Math.random() * 4 | 0) : (byForm[gh.form] ?? 0);
+    this.deathChoreo = Math.random() * 3 | 0;
     // призрак замирает вплотную перед жертвой
     gh.state = 'idle'; gh.stateT = 99; gh.huntPhase = null;
     gh.floor = pl.floor;
@@ -505,7 +509,7 @@ const game = {
       fire(0.65, () => { audio.whisper(); this.ghost.visibleAlpha = 0.9; });
       fire(1.15, () => {
         audio.unduck(0.04);
-        audio.jumpscare();
+        audio.jumpscare(this.deathVariant || 0);
         this.camera.shake(7, 1.0);
         this.deathFace = 1;
         try { navigator.vibrate?.([180, 70, 240]); } catch { /* нет поддержки */ }

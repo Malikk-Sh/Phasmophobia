@@ -745,16 +745,27 @@ export const audio = {
     tone({ type: 'sine', freq: 46, dur: 0.8, gain: 0.2, attack: 0.004 });
   },
 
-  jumpscare() {
+  // Скример: 4 варианта крика под лицо (0 исхудалое, 1 женщина, 2 тень, 3 повешенный)
+  jumpscare(variant = 0) {
     if (!this.ready) return;
-    if (playSample('player.jumpscare', { gain: 0.9 })) return;
-    // мгновенный удар + рваный крик из формант (менее «пищит», более глотка)
+    if (playSample('player.jumpscare', { gain: 0.9, rate: [1, 1.18, 0.82, 0.92][variant] || 1 })) return;
+    // мгновенный удар (общий для всех)
     noise({ dur: 0.14, type: 'lowpass', freq: 500, gain: 0.4, attack: 0.001 });
     tone({ type: 'sine', freq: 60, slide: 28, dur: 1.3, gain: 0.32, attack: 0.001 });
-    for (const [f, g] of [[520, 0.12], [830, 0.09], [1350, 0.05]]) {
-      tone({ type: 'sawtooth', freq: f * 1.15, slide: f * 0.55, dur: 0.9, gain: g, vib: 90, vibRate: 16, attack: 0.005 });
+    // форманты крика зависят от варианта
+    const F = {
+      0: [[520, 0.12], [830, 0.09], [1350, 0.05]],   // хриплая глотка
+      1: [[720, 0.11], [1180, 0.09], [2100, 0.06]],  // высокий женский визг
+      2: [[240, 0.13], [430, 0.1], [760, 0.06]],     // низкий утробный рёв (тень)
+      3: [[300, 0.1], [560, 0.09], [980, 0.05]],     // сдавленный сип (петля)
+    }[variant] || [[520, 0.12], [830, 0.09], [1350, 0.05]];
+    const vib = variant === 1 ? 130 : variant === 2 ? 55 : 90;
+    for (const [f, g] of F) {
+      tone({ type: 'sawtooth', freq: f * 1.15, slide: f * (variant === 2 ? 0.45 : 0.55), dur: 0.9, gain: g, vib, vibRate: 16, attack: 0.005 });
     }
-    noise({ dur: 1.0, type: 'bandpass', freq: 1100, q: 1.2, gain: 0.22, freqEnd: 350, attack: 0.004 });
+    noise({ dur: 1.0, type: 'bandpass', freq: variant === 1 ? 1900 : variant === 2 ? 600 : 1100, q: 1.2, gain: 0.22, freqEnd: 350, attack: 0.004 });
+    // повешенный: захлёбывающийся «дострел» в середине
+    if (variant === 3) setTimeout(() => started && noise({ dur: 0.25, type: 'bandpass', freq: 700, q: 3, gain: 0.14, attack: 0.01 }), 260);
   },
 
   thunder(closeness = 0.5) {
