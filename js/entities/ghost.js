@@ -569,9 +569,10 @@ export class Ghost {
       p.vx = Math.cos(a) * power;
       p.vy = Math.sin(a) * power;
       p.vz = gentle ? rndRange(6, 16) : rndRange(40, 90) * (this.tr.throwMult ? 1.4 : 1);
+      if (p.type === 'paper') p.vz *= 0.35; // газета планирует, а не подпрыгивает
       p.z = Math.max(p.z, gentle ? 1 : 2);
       p.thrownAt = game.time;
-      audio.propWhoosh();
+      audio.propWhoosh(audio.panFor(p.x), gentle ? 0.35 : power / 130);
     };
     if (this.tr.multiThrow && Math.random() < 0.35) {
       for (const p of props.slice(0, 4)) throwOne(p);

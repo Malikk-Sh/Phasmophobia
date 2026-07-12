@@ -528,16 +528,71 @@ export const audio = {
     noise({ dur: 0.15, freq: 2000, gain: 0.06, type: 'highpass' });
   },
 
-  propWhoosh() {
+  propWhoosh(pan = 0, power = 1) {
     if (!this.ready) return;
-    if (playSample('prop.whoosh', { gain: 0.45, rate: sampleGain(1, 0.1) })) return;
-    noise({ dur: 0.25, type: 'bandpass', freq: 900, freqEnd: 300, q: 1.5, gain: 0.1 });
+    const k = Math.max(0.3, Math.min(1.4, power));
+    if (playSample('prop.whoosh', { gain: 0.35 + k * 0.15, pan, rate: sampleGain(0.85 + k * 0.2, 0.1) })) return;
+    noise({ dur: 0.16 + k * 0.12, type: 'bandpass', freq: 600 + k * 400, freqEnd: 220, q: 1.5, gain: 0.05 + k * 0.07, pan });
   },
-  propImpact(hard = true, pan = 0) {
+
+  // Удар предмета об пол: звук зависит от материала и силы падения.
+  propImpact(material = 'wood', pan = 0, power = 1) {
     if (!this.ready) return;
-    if (playSample(hard ? 'prop.impact.hard' : 'prop.impact.soft', { gain: hard ? 0.55 : 0.45, pan, rate: sampleGain(1, 0.12) })) return;
-    noise({ dur: 0.12, freq: hard ? 2400 : 500, type: hard ? 'highpass' : 'lowpass', gain: 0.18, pan });
-    tone({ type: 'triangle', freq: hard ? 320 : 120, slide: 60, dur: 0.12, gain: 0.1, pan });
+    const k = Math.max(0.2, Math.min(1.4, power));
+    const legacy = material === 'ceramic' || material === 'glass' || material === 'metal'
+      ? 'prop.impact.hard' : 'prop.impact.soft';
+    if (playAny([`prop.impact.${material}`, legacy], { gain: 0.5 * k, pan, rate: sampleGain(1, 0.12) })) return;
+    switch (material) {
+      case 'ceramic': {
+        // яркий бурст + звенящие партиалы + каскад затухающего дребезга
+        noise({ dur: 0.09, type: 'bandpass', freq: 2800, q: 3, gain: 0.2 * k, pan, attack: 0.001 });
+        tone({ type: 'sine', freq: 1900, dur: 0.16, gain: 0.06 * k, pan, attack: 0.001 });
+        tone({ type: 'sine', freq: 2650, dur: 0.11, gain: 0.035 * k, pan, attack: 0.001 });
+        for (let i = 1; i <= 2 + (k > 0.8 ? 1 : 0); i++) {
+          setTimeout(() => started && noise({
+            dur: 0.05, type: 'bandpass', freq: 3000 + Math.random() * 800, q: 6,
+            gain: 0.08 * k / (i + 0.5), pan: pan + (Math.random() - 0.5) * 0.15, attack: 0.001,
+          }), i * (70 + Math.random() * 60));
+        }
+        break;
+      }
+      case 'glass': {
+        // высокий звон и мелкая «крошка»
+        noise({ dur: 0.1, type: 'highpass', freq: 3800, gain: 0.16 * k, pan, attack: 0.001 });
+        tone({ type: 'sine', freq: 3100, dur: 0.22, gain: 0.05 * k, pan, attack: 0.001 });
+        tone({ type: 'sine', freq: 4300, dur: 0.14, gain: 0.03 * k, pan, attack: 0.001 });
+        for (let i = 1; i <= 3; i++) {
+          setTimeout(() => started && tone({
+            type: 'sine', freq: 2600 + Math.random() * 2200, dur: 0.07,
+            gain: 0.03 * k / i, pan: pan + (Math.random() - 0.5) * 0.2, attack: 0.001,
+          }), i * (55 + Math.random() * 70));
+        }
+        break;
+      }
+      case 'metal': {
+        // лязг: расстроенные партиалы с долгим хвостом
+        noise({ dur: 0.07, type: 'bandpass', freq: 1100, q: 2, gain: 0.16 * k, pan, attack: 0.001 });
+        tone({ type: 'triangle', freq: 620 * sampleGain(1, 0.04), dur: 0.5, gain: 0.07 * k, pan, attack: 0.001 });
+        tone({ type: 'sine', freq: 872 * sampleGain(1, 0.05), dur: 0.42, gain: 0.045 * k, pan, attack: 0.001 });
+        tone({ type: 'sine', freq: 1490 * sampleGain(1, 0.06), dur: 0.3, gain: 0.026 * k, pan, attack: 0.001 });
+        if (k > 0.7) setTimeout(() => started && tone({
+          type: 'triangle', freq: 640, dur: 0.2, gain: 0.03 * k, pan, attack: 0.002,
+        }), 110 + Math.random() * 50);
+        break;
+      }
+      case 'soft': {
+        // приглушённый шлепок
+        noise({ dur: 0.07, type: 'lowpass', freq: 240, gain: 0.14 * k, pan, attack: 0.002, rate: 0.7 });
+        tone({ type: 'sine', freq: 85, slide: 50, dur: 0.09, gain: 0.07 * k, pan, attack: 0.002 });
+        break;
+      }
+      default: { // wood
+        // глухой деревянный бух с коротким верхом
+        noise({ dur: 0.09, type: 'lowpass', freq: 420, gain: 0.17 * k, pan, attack: 0.001 });
+        tone({ type: 'sine', freq: 115, slide: 65, dur: 0.12, gain: 0.1 * k, pan, attack: 0.001 });
+        tone({ type: 'triangle', freq: 245, dur: 0.05, gain: 0.04 * k, pan, attack: 0.001 });
+      }
+    }
   },
 
   writing() {
