@@ -11,6 +11,9 @@ export class FX {
     this.makeGrain();
     this.flash = 0;     // белая вспышка (скример)
     this.lightning = 0; // вспышка молнии 0..1
+    this.fireflies = null; // светлячки во дворе (ленивая инициализация)
+    this.fog = null;       // клочья приземного тумана
+    this.nightDim = 1;     // 1 — светлячки горят, 0 — погасли (охота/гром)
   }
 
   resize(w, h) {
@@ -96,6 +99,73 @@ export class FX {
       // молния гаснет рвано, с повторным подмигиванием
       this.lightning -= dt * (Math.random() < 0.2 ? 6 : 2.2);
       if (this.lightning < 0) this.lightning = 0;
+    }
+    this.updateYard(dt, game);
+  }
+
+  // Светлячки и приземный туман во дворе (только этаж 0). Светлячки гаснут все
+  // разом во время охоты и на раскате молнии — двор замирает, и это жутко.
+  updateYard(dt, game) {
+    const world = game.world;
+    if (!world || !world.exterior) return;
+    // ленивая инициализация из позиций кустов/деревьев
+    if (!this.fireflies) {
+      this.fireflies = [];
+      const anchors = [...world.exterior.bushes, ...world.exterior.trees].slice(0, 14);
+      for (const b of anchors) {
+        this.fireflies.push({
+          hx: b.x, hy: b.y, x: b.x, y: b.y,
+          phase: Math.random() * 6.28, hue: 60 + Math.random() * 40,
+          rad: 14 + Math.random() * 22, sp: 0.4 + Math.random() * 0.5,
+        });
+      }
+      this.fog = [];
+      for (let i = 0; i < 8; i++) {
+        this.fog.push({
+          x: rndRange(2, 46) * TILE, y: rndRange(2, 32) * TILE,
+          r: rndRange(TILE * 2.4, TILE * 4.2), vx: rndRange(-4, 4), vy: rndRange(-2, 2),
+          a: rndRange(0.05, 0.12),
+        });
+      }
+    }
+    // цель яркости: гаснут при охоте/недавней молнии
+    const hunt = game.ghost && game.ghost.state === 'hunt';
+    const target = (hunt || this.lightning > 0.3) ? 0 : 1;
+    this.nightDim += (target - this.nightDim) * Math.min(1, dt * (target < this.nightDim ? 4 : 0.6));
+    const t = game.time;
+    for (const f of this.fireflies) {
+      f.x = f.hx + Math.cos(t * f.sp + f.phase) * f.rad;
+      f.y = f.hy + Math.sin(t * f.sp * 1.3 + f.phase) * f.rad * 0.7;
+    }
+    for (const g of this.fog) {
+      g.x += g.vx * dt; g.y += g.vy * dt;
+      if (g.x < 0 || g.x > 48 * TILE) g.vx *= -1;
+      if (g.y < 0 || g.y > 34 * TILE) g.vy *= -1;
+    }
+  }
+
+  // двор: туман и светлячки (в мировой трансформации, только этаж 0, снаружи)
+  drawYard(ctx, game) {
+    if (game.player.floor !== 0 || !this.fog) return;
+    const t = game.time;
+    // приземный туман — мягкие дрейфующие клочья
+    for (const g of this.fog) {
+      const grd = ctx.createRadialGradient(g.x, g.y, 1, g.x, g.y, g.r);
+      grd.addColorStop(0, `rgba(150,160,170,${g.a})`);
+      grd.addColorStop(1, 'rgba(150,160,170,0)');
+      ctx.fillStyle = grd;
+      ctx.beginPath(); ctx.ellipse(g.x, g.y, g.r, g.r * 0.55, 0, 0, 7); ctx.fill();
+    }
+    // светлячки — мерцающие тёплые точки с ореолом
+    for (const f of this.fireflies) {
+      const pulse = (0.5 + Math.sin(t * 3 + f.phase) * 0.5) * this.nightDim;
+      if (pulse < 0.03) continue;
+      const grd = ctx.createRadialGradient(f.x, f.y, 0.5, f.x, f.y, 5);
+      grd.addColorStop(0, `hsla(${f.hue},90%,70%,${0.5 * pulse})`);
+      grd.addColorStop(1, `hsla(${f.hue},90%,60%,0)`);
+      ctx.fillStyle = grd; ctx.beginPath(); ctx.arc(f.x, f.y, 5, 0, 7); ctx.fill();
+      ctx.fillStyle = `hsla(${f.hue},95%,82%,${0.9 * pulse})`;
+      ctx.beginPath(); ctx.arc(f.x, f.y, 1, 0, 7); ctx.fill();
     }
   }
 

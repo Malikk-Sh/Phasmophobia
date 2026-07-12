@@ -83,6 +83,11 @@ export function furnish(world, blueprint) {
   }));
   for (const r of fence) colliders[0].push(r);
 
+  // Дворовые препятствия (сарай, колодец, будка…) — только коллизия; рисует renderer
+  for (const [x, y, w, h] of (bp.exterior.obstacles || [])) {
+    colliders[0].push({ x: x * TILE, y: y * TILE, w: w * TILE, h: h * TILE });
+  }
+
   // Фургон (кузов — коллайдер)
   const van = world.van;
   colliders[0].push({ x: van.x, y: van.y, w: van.w, h: van.h - TILE * 0.9 }); // зад открыт

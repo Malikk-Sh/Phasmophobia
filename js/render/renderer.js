@@ -5,6 +5,11 @@ import { FLOOR_BASEMENT, OUTSIDE } from '../world/house.js';
 import { drawFurnitureItem, drawProp } from '../world/furniture.js';
 import { drawPlaced } from '../systems/equipment.js';
 
+const YARD_KINDS = new Set([
+  'shed', 'well', 'woodpile', 'clothesline', 'swing', 'scarecrow',
+  'doghouse', 'gravestone', 'deadtree', 'puddle', 'birdbath',
+]);
+
 const FLOOR_STYLE = {
   garage: { base: '#303338', kind: 'concrete' },
   utility: { base: '#383e43', kind: 'tile' },
@@ -122,6 +127,9 @@ export class Renderer {
       c.fillStyle = grd;
       c.beginPath(); c.ellipse(b.x, b.y, b.r, b.r * 0.85, 0, 0, 7); c.fill();
     }
+
+    // дворовые объекты (сарай, колодец, могилы…) — из чертежа, до мебели
+    this.paintYardDecor(c, rng);
 
     // мебель первого этажа (подвижная рисуется покадрово в drawScene)
     for (const f of this.world.furniture[0]) if (!f.movable) drawFurnitureItem(c, f);
@@ -308,6 +316,163 @@ export class Renderer {
           c.beginPath(); c.ellipse(x - 2, y - 2, 8, 5, 0, 0, 7); c.fill();
         }
       }
+    }
+  }
+
+  // Дворовые объекты (этаж 0, снаружи): сарай, колодец, поленница, качели,
+  // пугало, будка, могилы, сухое дерево, лужи, бельевая верёвка. Запекаются
+  // в статику. Координаты/размеры — из world.decor (kind + x,y,w,h в тайлах).
+  paintYardDecor(c, rng) {
+    for (const e of this.world.decor) {
+      if (e.floor !== 0 || !YARD_KINDS.has(e.kind)) continue;
+      const x = e.x * TILE, y = e.y * TILE;
+      c.save();
+      switch (e.kind) {
+        case 'shed': {
+          const w = (e.w || 3) * TILE, h = (e.h || 2.4) * TILE;
+          c.fillStyle = 'rgba(0,0,0,.4)'; c.fillRect(x + 4, y + 6, w, h);
+          const g = c.createLinearGradient(x, y, x + w, y);
+          g.addColorStop(0, '#3a3126'); g.addColorStop(0.5, '#4a3f30'); g.addColorStop(1, '#2e2820');
+          c.fillStyle = g; c.fillRect(x, y, w, h);
+          c.strokeStyle = 'rgba(0,0,0,.5)'; c.lineWidth = 1;             // доски
+          for (let i = 1; i < w / 10; i++) { c.beginPath(); c.moveTo(x + i * 10, y); c.lineTo(x + i * 10, y + h); c.stroke(); }
+          c.fillStyle = '#1a1712'; c.fillRect(x + w * 0.36, y + h * 0.4, w * 0.28, h * 0.6); // дверь-провал
+          c.fillStyle = '#12222a'; c.fillRect(x + w * 0.12, y + h * 0.2, w * 0.16, h * 0.24); // окошко
+          c.fillStyle = 'rgba(120,150,180,.15)'; c.fillRect(x + w * 0.12, y + h * 0.2, w * 0.16, h * 0.12);
+          c.fillStyle = '#241d16'; c.beginPath();                        // скат крыши
+          c.moveTo(x - 4, y + 4); c.lineTo(x + w / 2, y - h * 0.28); c.lineTo(x + w + 4, y + 4); c.closePath(); c.fill();
+          break;
+        }
+        case 'well': {
+          const r = (e.w || 1.2) * TILE * 0.5;
+          c.fillStyle = 'rgba(0,0,0,.4)'; c.beginPath(); c.ellipse(x + 3, y + 4, r + 3, r + 1, 0, 0, 7); c.fill();
+          c.fillStyle = '#4a4640'; c.beginPath(); c.arc(x, y, r + 3, 0, 7); c.fill(); // каменный бортик
+          c.strokeStyle = '#2a2620'; c.lineWidth = 2; c.beginPath(); c.arc(x, y, r + 3, 0, 7); c.stroke();
+          c.fillStyle = '#050607'; c.beginPath(); c.arc(x, y, r, 0, 7); c.fill(); // чёрный провал
+          c.strokeStyle = '#3a352c'; c.lineWidth = 2;                    // стойки навеса
+          c.beginPath(); c.moveTo(x - r - 2, y); c.lineTo(x - r - 2, y - r * 2.4);
+          c.moveTo(x + r + 2, y); c.lineTo(x + r + 2, y - r * 2.4); c.stroke();
+          c.fillStyle = '#241d14'; c.beginPath();                        // навес
+          c.moveTo(x - r - 6, y - r * 2.2); c.lineTo(x, y - r * 3); c.lineTo(x + r + 6, y - r * 2.2); c.closePath(); c.fill();
+          c.strokeStyle = '#1a1510'; c.lineWidth = 3;                    // ворот
+          c.beginPath(); c.moveTo(x - r, y - r * 1.4); c.lineTo(x + r, y - r * 1.4); c.stroke();
+          break;
+        }
+        case 'woodpile': {
+          const w = (e.w || 2) * TILE;
+          c.fillStyle = 'rgba(0,0,0,.35)'; c.fillRect(x - 2, y + 2, w + 4, TILE * 0.9);
+          for (let row = 0; row < 3; row++) for (let i = 0; i < w / 9; i++) {
+            const lx = x + i * 9 + (row % 2) * 4.5, ly = y + row * 6;
+            c.fillStyle = ['#5a4530', '#6a5238', '#4c3a26'][i % 3];
+            c.beginPath(); c.arc(lx, ly, 4.2, 0, 7); c.fill();
+            c.fillStyle = '#c9b48a'; c.beginPath(); c.arc(lx, ly, 2.2, 0, 7); c.fill(); // торец
+            c.strokeStyle = 'rgba(90,70,40,.6)'; c.lineWidth = 0.5; c.beginPath(); c.arc(lx, ly, 1.2, 0, 7); c.stroke();
+          }
+          break;
+        }
+        case 'clothesline': {
+          const w = (e.w || 4) * TILE;
+          c.strokeStyle = '#2a251c'; c.lineWidth = 2.5;                  // столбы
+          c.beginPath(); c.moveTo(x, y); c.lineTo(x, y - TILE * 1.6);
+          c.moveTo(x + w, y); c.lineTo(x + w, y - TILE * 1.6);
+          c.moveTo(x - 6, y - TILE * 1.5); c.lineTo(x + 6, y - TILE * 1.5);
+          c.moveTo(x + w - 6, y - TILE * 1.5); c.lineTo(x + w + 6, y - TILE * 1.5); c.stroke();
+          c.strokeStyle = 'rgba(20,18,14,.8)'; c.lineWidth = 1;          // провисшая верёвка
+          c.beginPath(); c.moveTo(x, y - TILE * 1.5); c.quadraticCurveTo(x + w / 2, y - TILE * 1.5 + 10, x + w, y - TILE * 1.5); c.stroke();
+          for (const fx2 of [0.28, 0.55, 0.78]) {                        // простыни
+            const sx = x + w * fx2, sy = y - TILE * 1.5 + 6;
+            c.fillStyle = 'rgba(200,205,210,.5)';
+            c.beginPath(); c.moveTo(sx - 6, sy); c.lineTo(sx + 6, sy);
+            c.quadraticCurveTo(sx + 5, sy + 16, sx + 2, sy + 22);
+            c.quadraticCurveTo(sx, sy + 16, sx - 2, sy + 22);
+            c.quadraticCurveTo(sx - 5, sy + 16, sx - 6, sy); c.closePath(); c.fill();
+          }
+          break;
+        }
+        case 'swing': {
+          c.strokeStyle = '#2c261c'; c.lineWidth = 2.5;                  // рама-А
+          c.beginPath();
+          c.moveTo(x - TILE * 0.7, y + TILE * 0.5); c.lineTo(x, y - TILE * 1.2); c.lineTo(x + TILE * 0.7, y + TILE * 0.5);
+          c.moveTo(x, y - TILE * 1.2); c.lineTo(x + TILE * 1.4, y - TILE * 1.2); c.lineTo(x + TILE * 2.1, y + TILE * 0.5);
+          c.moveTo(x + TILE * 0.7, y - TILE * 1.2); c.lineTo(x + TILE * 0.7, y + TILE * 0.5); c.stroke();
+          c.strokeStyle = 'rgba(20,18,14,.85)'; c.lineWidth = 1;         // цепи
+          c.beginPath(); c.moveTo(x + TILE * 0.4, y - TILE * 1.15); c.lineTo(x + TILE * 0.35, y + TILE * 0.1);
+          c.moveTo(x + TILE * 1.0, y - TILE * 1.15); c.lineTo(x + TILE * 1.05, y + TILE * 0.1); c.stroke();
+          c.fillStyle = '#3a2e1e'; c.fillRect(x + TILE * 0.3, y + TILE * 0.1, TILE * 0.8, 4); // сиденье
+          break;
+        }
+        case 'scarecrow': {
+          c.strokeStyle = '#3a2e1c'; c.lineWidth = 3;                    // крест
+          c.beginPath(); c.moveTo(x, y + TILE); c.lineTo(x, y - TILE * 1.1);
+          c.moveTo(x - TILE * 0.7, y - TILE * 0.4); c.lineTo(x + TILE * 0.7, y - TILE * 0.4); c.stroke();
+          c.fillStyle = '#5a4a2e';                                       // одежда
+          c.beginPath(); c.moveTo(x - 8, y - TILE * 0.5); c.lineTo(x + 8, y - TILE * 0.5); c.lineTo(x + 5, y + TILE * 0.4); c.lineTo(x - 5, y + TILE * 0.4); c.closePath(); c.fill();
+          c.fillStyle = '#8a7448'; c.beginPath(); c.arc(x, y - TILE * 0.95, 6, 0, 7); c.fill(); // мешок-голова
+          c.fillStyle = '#1a140c'; c.fillRect(x - 2.6, y - TILE * 0.98, 1.6, 1.6); c.fillRect(x + 1, y - TILE * 0.98, 1.6, 1.6); // глаза-стежки
+          c.strokeStyle = '#1a140c'; c.lineWidth = 0.7; c.beginPath(); c.moveTo(x - 2, y - TILE * 0.9); c.lineTo(x + 2, y - TILE * 0.9); c.stroke();
+          c.fillStyle = '#8a7448'; c.beginPath(); c.moveTo(x - 8, y - TILE * 1.15); c.lineTo(x + 8, y - TILE * 1.15); c.lineTo(x, y - TILE * 1.35); c.closePath(); c.fill(); // шляпа
+          break;
+        }
+        case 'doghouse': {
+          const w = TILE * 1.3, h = TILE * 1.0;
+          c.fillStyle = 'rgba(0,0,0,.35)'; c.fillRect(x - w / 2 + 3, y - h / 2 + 4, w, h);
+          c.fillStyle = '#4a3826'; c.fillRect(x - w / 2, y - h / 2, w, h);
+          c.fillStyle = '#050505'; c.beginPath(); c.arc(x, y + h * 0.12, w * 0.28, 0, 7); c.fill(); // чёрный лаз
+          c.fillStyle = '#33261a'; c.beginPath();
+          c.moveTo(x - w / 2 - 3, y - h / 2 + 2); c.lineTo(x, y - h * 0.95); c.lineTo(x + w / 2 + 3, y - h / 2 + 2); c.closePath(); c.fill();
+          c.strokeStyle = '#6a5a3a'; c.lineWidth = 1; c.beginPath();     // цепь у входа
+          c.moveTo(x + 3, y + h * 0.2); c.lineTo(x + 10, y + h * 0.5); c.stroke();
+          break;
+        }
+        case 'gravestone': {
+          const w = TILE * 0.7, h = TILE * 0.9;
+          c.fillStyle = 'rgba(0,0,0,.4)'; c.beginPath(); c.ellipse(x + 2, y + h * 0.5, w * 0.7, 4, 0, 0, 7); c.fill();
+          const g = c.createLinearGradient(x - w / 2, 0, x + w / 2, 0);
+          g.addColorStop(0, '#3e4247'); g.addColorStop(0.5, '#565b61'); g.addColorStop(1, '#33373b');
+          c.fillStyle = g;
+          c.beginPath();
+          c.moveTo(x - w / 2, y + h / 2); c.lineTo(x - w / 2, y - h * 0.15);
+          c.arc(x, y - h * 0.15, w / 2, Math.PI, 0); c.lineTo(x + w / 2, y + h / 2); c.closePath(); c.fill();
+          c.strokeStyle = 'rgba(0,0,0,.4)'; c.lineWidth = 0.8;
+          c.beginPath(); c.moveTo(x, y - h * 0.1); c.lineTo(x, y + h * 0.12);
+          c.moveTo(x - w * 0.22, y + 1); c.lineTo(x + w * 0.22, y + 1); c.stroke(); // крест-гравировка
+          c.fillStyle = 'rgba(40,60,45,.4)'; c.fillRect(x - w / 2, y + h * 0.3, w, h * 0.2); // мох
+          break;
+        }
+        case 'deadtree': {
+          const r = (e.w || 1.3) * TILE;
+          c.strokeStyle = '#1e1811'; c.lineWidth = 5;
+          c.beginPath(); c.moveTo(x, y + r * 0.4); c.lineTo(x, y - r * 0.4); c.stroke();
+          const branch = (ang, len, wdt) => {
+            c.lineWidth = wdt; c.beginPath(); c.moveTo(x, y - r * 0.2);
+            const mx = x + Math.cos(ang) * len * 0.6, my = y - r * 0.2 + Math.sin(ang) * len * 0.6;
+            c.lineTo(mx, my);
+            c.lineTo(mx + Math.cos(ang - 0.5) * len * 0.4, my + Math.sin(ang - 0.5) * len * 0.4); c.stroke();
+          };
+          c.strokeStyle = '#241c13';
+          branch(-2.4, r, 3); branch(-0.7, r * 0.9, 3); branch(-1.5, r * 1.1, 2.5);
+          branch(-2.9, r * 0.7, 2); branch(-0.2, r * 0.6, 2);
+          break;
+        }
+        case 'puddle': {
+          const w = (e.w || 1.6) * TILE, h = (e.h || 1) * TILE;
+          const g = c.createRadialGradient(x, y, 1, x, y, w / 2);
+          g.addColorStop(0, 'rgba(30,40,52,.55)'); g.addColorStop(0.7, 'rgba(20,28,38,.4)'); g.addColorStop(1, 'rgba(20,28,38,0)');
+          c.fillStyle = g; c.beginPath(); c.ellipse(x, y, w / 2, h / 2, 0, 0, 7); c.fill();
+          c.strokeStyle = 'rgba(120,150,180,.18)'; c.lineWidth = 1;      // холодный блик-контур
+          c.beginPath(); c.ellipse(x - w * 0.08, y - h * 0.08, w * 0.32, h * 0.28, 0.3, 0, 7); c.stroke();
+          break;
+        }
+        case 'birdbath': {
+          const r = TILE * 0.55;
+          c.fillStyle = 'rgba(0,0,0,.35)'; c.beginPath(); c.ellipse(x + 2, y + 3, r, r * 0.5, 0, 0, 7); c.fill();
+          c.fillStyle = '#4a4640'; c.fillRect(x - 3, y - r, 6, r * 1.6);  // ножка
+          c.fillStyle = '#565b61'; c.beginPath(); c.ellipse(x, y - r, r, r * 0.55, 0, 0, 7); c.fill(); // чаша
+          c.fillStyle = '#1e2830'; c.beginPath(); c.ellipse(x, y - r, r * 0.7, r * 0.38, 0, 0, 7); c.fill(); // тёмная вода
+          break;
+        }
+      }
+      c.restore();
     }
   }
 
@@ -650,20 +815,27 @@ export class Renderer {
     // частицы мира
     game.fx.drawWorld(ctx, floor);
 
-    // кроны деревьев поверх
+    // двор: приземный туман и светлячки (под кронами)
+    game.fx.drawYard(ctx, game);
+
+    // кроны деревьев поверх — покачиваются на ветру
     if (floor === 0) {
       for (const tr of world.exterior.trees) {
-        const grd = ctx.createRadialGradient(tr.x - tr.r * 0.25, tr.y - tr.r * 0.25, tr.r * 0.15, tr.x, tr.y, tr.r);
+        // ветер: крона качается и «дышит» от времени (у каждого дерева своя фаза)
+        const swayX = Math.sin(t * 0.9 + tr.x * 0.05) * tr.r * 0.05;
+        const swayY = Math.cos(t * 0.7 + tr.y * 0.05) * tr.r * 0.03;
+        const cx = tr.x + swayX, cy = tr.y + swayY;
+        const grd = ctx.createRadialGradient(cx - tr.r * 0.25, cy - tr.r * 0.25, tr.r * 0.15, cx, cy, tr.r);
         grd.addColorStop(0, 'rgba(34,48,30,.96)');
         grd.addColorStop(0.75, 'rgba(22,32,20,.95)');
         grd.addColorStop(1, 'rgba(12,18,12,.85)');
         ctx.fillStyle = grd;
         ctx.beginPath();
-        // неровная крона
+        // неровная крона, листва шевелится
         for (let i = 0; i <= 10; i++) {
           const a = i / 10 * Math.PI * 2;
-          const rr = tr.r * (1 + 0.14 * Math.sin(a * 3 + tr.x));
-          const px = tr.x + Math.cos(a) * rr, py = tr.y + Math.sin(a) * rr;
+          const rr = tr.r * (1 + 0.14 * Math.sin(a * 3 + tr.x) + 0.04 * Math.sin(a * 5 + t * 1.6 + tr.x));
+          const px = cx + Math.cos(a) * rr, py = cy + Math.sin(a) * rr;
           i ? ctx.lineTo(px, py) : ctx.moveTo(px, py);
         }
         ctx.closePath(); ctx.fill();

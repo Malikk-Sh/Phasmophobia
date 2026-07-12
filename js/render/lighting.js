@@ -141,6 +141,14 @@ export class Lighting {
         (0.45 + Math.sin(game.time * 13) * 0.06) * fl);
       // фургон светится изнутри
       this.punch(world.van.x + world.van.w / 2, world.van.y + world.van.h - TILE * 0.6, TILE * 2.4, 0.5);
+      // светлячки во дворе пробиваются сквозь тьму крошечными огоньками
+      const flies = game.fx.fireflies;
+      if (flies && game.fx.nightDim > 0.05) {
+        for (const f of flies) {
+          const s = game.fx.nightDim * (0.5 + Math.sin(game.time * 3 + f.phase) * 0.5) * 0.55;
+          if (s > 0.03) this.punch(f.x, f.y, TILE * 0.85, s);
+        }
+      }
     }
 
     // размещённое снаряжение

@@ -210,9 +210,18 @@ const willow = {
       [1, 1, 45.5, 0.25], [1, 32.6, 45.5, 0.25],
       [1, 1, 0.25, 31.8], [46.3, 1, 0.25, 31.8],
     ],
+    // дворовые препятствия (коллизия): будка, поленница
+    obstacles: [[5.35, 21.5, 1.3, 1], [41, 26.5, 2, 0.9]],
   },
 
   decor: [
+    // --- двор ---
+    { kind: 'doghouse', floor: 0, x: 6, y: 22 },
+    { kind: 'woodpile', floor: 0, x: 41, y: 26.5, w: 2 },
+    { kind: 'clothesline', floor: 0, x: 12, y: 29, w: 4 },
+    { kind: 'birdbath', floor: 0, x: 7, y: 20 },
+    { kind: 'puddle', floor: 0, x: 20, y: 29.5, w: 1.8, h: 1 },
+    { kind: 'puddle', floor: 0, x: 33, y: 28, w: 1.5, h: 0.9 },
     // --- фон (под полами комнат) ---
     { kind: 'driveway', floor: 0, x: 1.4, y: 7.6, w: 8.6, h: 3.8 },
     { kind: 'vanPath', floor: 0, x: 4.9, y: 15.5, n: 9, step: 0.62 },
@@ -439,9 +448,16 @@ const oakgrove = {
       [1, 1, 45.5, 0.25], [1, 32.6, 45.5, 0.25],
       [1, 1, 0.25, 31.8], [46.3, 1, 0.25, 31.8],
     ],
+    // дворовые препятствия: колодец
+    obstacles: [[5.3, 24.3, 1.4, 1.4]],
   },
 
   decor: [
+    // --- двор: колодец, пугало у грядок, качели, лужа ---
+    { kind: 'well', floor: 0, x: 6, y: 25, w: 1.2 },
+    { kind: 'scarecrow', floor: 0, x: 13, y: 30 },
+    { kind: 'swing', floor: 0, x: 29, y: 30 },
+    { kind: 'puddle', floor: 0, x: 43, y: 24, w: 1.6, h: 1 },
     { kind: 'driveway', floor: 0, x: 2, y: 6, w: 7, h: 4 },
     { kind: 'vanPath', floor: 0, x: 5.5, y: 17, n: 5, step: 0.6 },
     { kind: 'painting', floor: 0, x: 21, y: 13, color: '#31424a' },
@@ -661,9 +677,20 @@ const ravenhill = {
       [1, 1, 45.5, 0.25], [1, 32.6, 45.5, 0.25],
       [1, 1, 0.25, 31.8], [46.3, 1, 0.25, 31.8],
     ],
+    // дворовые препятствия: колодец, сухое дерево
+    obstacles: [[43.3, 23.3, 1.4, 1.4], [42.7, 7.7, 0.6, 0.6]],
   },
 
   decor: [
+    // --- двор (самый жуткий): могилы, сухое дерево, колодец, лужи ---
+    { kind: 'gravestone', floor: 0, x: 6, y: 24 },
+    { kind: 'gravestone', floor: 0, x: 7.6, y: 25.4 },
+    { kind: 'gravestone', floor: 0, x: 5.2, y: 26.2 },
+    { kind: 'gravestone', floor: 0, x: 42, y: 30 },
+    { kind: 'deadtree', floor: 0, x: 43, y: 8, w: 1.4 },
+    { kind: 'well', floor: 0, x: 44, y: 24, w: 1.2 },
+    { kind: 'puddle', floor: 0, x: 20, y: 30, w: 2, h: 1.1 },
+    { kind: 'puddle', floor: 0, x: 33, y: 29, w: 1.6, h: 0.9 },
     { kind: 'driveway', floor: 0, x: 2, y: 6, w: 7, h: 4 },
     { kind: 'vanPath', floor: 0, x: 5.5, y: 15, n: 5, step: 0.6 },
     { kind: 'painting', floor: 0, x: 22, y: 11, color: '#31424a' },
