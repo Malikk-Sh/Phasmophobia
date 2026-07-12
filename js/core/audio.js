@@ -23,7 +23,7 @@ let ambientBus = null, busInput = null, convolver = null, reverbSend = null;
 const PAN_SPREAD = 320; // ~10 тайлов: на этой дистанции звук уходит в край стерео
 
 // таймеры
-const T = { heart: 0, emf: 0, ghostStep: 0, creak: 8, crackle: 0, whis: 20 };
+const T = { heart: 0, emf: 0, ghostStep: 0, creak: 8, crackle: 0, whis: 20, breath: 0, above: 0 };
 
 function now() { return ctx.currentTime; }
 
@@ -264,8 +264,30 @@ export const audio = {
   // ---------- Кадровое обновление ----------
   update(dt, s) {
     if (!this.ready) return;
-    // ducking: под охотой приглушаем фоновый бед, чтобы кульминация «пробивала»
-    if (ambientBus) ambientBus.gain.setTargetAtTime(s.hunt ? 0.42 : 1, now(), 0.35);
+    // ducking: мёртвая тишина перед охотой (predHunt), приглушение под охотой
+    if (ambientBus) {
+      const duckTarget = s.preHunt ? 0.05 : (s.hunt ? 0.42 : 1);
+      ambientBus.gain.setTargetAtTime(duckTarget, now(), s.preHunt ? 0.5 : 0.35);
+    }
+    // дрожащее дыхание игрока (в укрытии / при низком рассудке; чаще, если призрак рядом)
+    if (s.breath > 0.05) {
+      T.breath -= dt;
+      if (T.breath <= 0) {
+        T.breath = 2.6 - s.breath * 1.7 + Math.random() * 0.4;
+        this.playerBreath(s.breath);
+      }
+    }
+    // шаги призрака над головой (игрок в подвале, призрак ходит по первому этажу)
+    if (s.stepsAbove > 0.05) {
+      T.above -= dt;
+      if (T.above <= 0) {
+        T.above = 0.6 + Math.random() * 0.25;
+        const pan = this.panFor(s.aboveX ?? this.listener.x);
+        noise({ dur: 0.14, type: 'lowpass', freq: 150, gain: 0.12 * s.stepsAbove, pan, rate: 0.6, attack: 0.004 });
+        tone({ type: 'sine', freq: 52, dur: 0.12, gain: 0.08 * s.stepsAbove, pan, attack: 0.004 });
+        if (Math.random() < 0.3) setTimeout(() => started && noise({ dur: 0.2, type: 'lowpass', freq: 90, gain: 0.05, pan }), 120); // скрип половицы сверху
+      }
+    }
     // сердцебиение
     if (s.heartbeat > 0.02) {
       T.heart -= dt;
@@ -520,6 +542,21 @@ export const audio = {
     if (Math.random() < 0.45) setTimeout(() => started && noise({
       dur: 0.09, type: 'bandpass', freq: 420, q: 3, gain: 0.04, pan, attack: 0.005,
     }), dur * 1000 + 90);
+  },
+
+  // Дрожащее дыхание игрока: вдох через нос → выдох; при панике — прерывистое
+  playerBreath(intensity = 0.5) {
+    if (!this.ready) return;
+    if (playSample('player.breath', { gain: 0.4 + intensity * 0.3, rate: sampleGain(1, 0.05) })) return;
+    const shaky = intensity > 0.6;
+    // вдох
+    noise({ dur: 0.3, type: 'bandpass', freq: 720, q: 1.2, gain: 0.04 + intensity * 0.05, attack: 0.08, rate: 0.9 });
+    // выдох (ниже, длиннее), при панике дрожит на два толчка
+    setTimeout(() => {
+      if (!started) return;
+      noise({ dur: 0.4, type: 'bandpass', freq: 460, q: 1.4, gain: 0.045 + intensity * 0.05, attack: 0.05, rate: 0.8 });
+      if (shaky) setTimeout(() => started && noise({ dur: 0.22, type: 'bandpass', freq: 500, q: 1.6, gain: 0.04, attack: 0.02 }), 260);
+    }, 360);
   },
 
   sensorPing(pan = 0) {

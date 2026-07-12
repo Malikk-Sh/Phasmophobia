@@ -635,8 +635,10 @@ const game = {
     if (this.hallucT <= 0) {
       this.hallucT = rndRange(16, 34);
       if (pl.sanity < 35 && pl.alive && this.world.isIndoors(pl.floor, pl.x, pl.y)) {
+        const room = this.world.roomById(this.world.roomAt(pl.floor, pl.x, pl.y));
+        const dark = !room || !room.lightOn || !this.world.breaker.on;
         const r = Math.random();
-        if (r < 0.4) {
+        if (r < 0.32) {
           // тень мелькает на границе видимости
           const a = pl.angle + rndRange(-1.1, 1.1);
           this.hallucination = {
@@ -644,7 +646,15 @@ const game = {
             y: pl.y + Math.sin(a) * TILE * 5.5,
             floor: pl.floor, t: 0.7, max: 0.7,
           };
-        } else if (r < 0.7) audio.phantomSteps();
+        } else if (r < 0.55 && dark) {
+          // пара тусклых глаз во тьме на краю зрения (гаснут под лучом фонаря)
+          const a = pl.angle + rndRange(-1.3, 1.3);
+          this.hallucination = {
+            x: pl.x + Math.cos(a) * TILE * 6, y: pl.y + Math.sin(a) * TILE * 6,
+            floor: pl.floor, t: 1.6, max: 1.6, eyes: true,
+          };
+          audio.whisper();
+        } else if (r < 0.78) audio.phantomSteps();
         else equipment.fakeEmfT = 1.2; // ложный всплеск на приборе
       }
     }
@@ -685,12 +695,28 @@ const game = {
       huntNear = clamp(1 - d / (TILE * 12), 0, 1);
       heartbeat = clamp(1 - d / (TILE * 14), 0.3, 1);
     } else if (pl.sanity < 25) heartbeat = 0.25;
+    // дыхание игрока: в укрытии и при низком рассудке; сильнее, если призрак рядом
+    let breath = 0;
+    if (pl.alive) {
+      const ghSameFloor = gh.floor === pl.floor;
+      const ghD = ghSameFloor ? dist(gh.x, gh.y, pl.x, pl.y) : 1e9;
+      if (pl.hidden) breath = clamp(0.45 + (1 - ghD / (TILE * 8)) * 0.5, 0.4, 1);
+      else if (pl.sanity < 25) breath = clamp((25 - pl.sanity) / 25 * 0.6, 0, 0.6);
+      if (gh.state === 'hunt' && ghD < TILE * 8) breath = Math.max(breath, 0.85);
+    }
+    // шаги призрака над головой: игрок в подвале, призрак ходит по первому этажу
+    let stepsAbove = 0, aboveX = pl.x;
+    if (pl.floor === FLOOR_BASEMENT && gh.floor === 0 && gh.state !== 'hunt') {
+      stepsAbove = 0.7; aboveX = gh.x;
+    }
     // позиция слушателя для панорамы позиционных звуков
     audio.setListener(pl.x, pl.y, pl.floor);
     audio.update(dt, {
       heartbeat,
       huntNear,
       hunt: gh.state === 'hunt',
+      preHunt: gh.state === 'hunt' && gh.huntPhase === 'warn', // мёртвая тишина перед броском
+      breath, stepsAbove, aboveX,
       ghostX: gh.x, ghostFloor: gh.floor, // шаги охоты идут из реальной стороны
       // темп шагов призрака: в погоне — частые, у Ревенанта вне погони — редкие тяжёлые
       ghostStepInt: gh.huntPhase === 'chase' ? 0.34

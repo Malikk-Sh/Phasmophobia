@@ -207,11 +207,12 @@ export class FX {
         ctx.fill();
       }
     }
-    // виньетка: сильнее при низком рассудке и охоте
+    // виньетка: сильнее при низком рассудке и охоте; в доме «дышит»
     let vig = 0.55 + (1 - pl.sanity / 100) * 0.4;
     if (game.ghost && game.ghost.state === 'hunt') {
       vig += 0.18 + Math.sin(game.time * 6.2) * 0.1;
     }
+    if (!outdoors) vig += Math.sin(game.time * 1.25) * 0.05; // медленное «дыхание» дома
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.globalAlpha = clamp(vig, 0, 1.4) > 1 ? 1 : clamp(vig, 0, 1);
     ctx.drawImage(this.vignette, 0, 0, w, h);
@@ -222,18 +223,38 @@ export class FX {
     }
     ctx.globalAlpha = 1;
 
-    // зерно
+    // зерно (грубее при низком рассудке)
     const tile = this.grainTiles[(Math.random() * 4) | 0];
     const ox = Math.random() * 160, oy = Math.random() * 160;
-    ctx.globalAlpha = 0.5;
+    ctx.globalAlpha = pl.sanity < 30 ? 0.72 : 0.5;
     for (let y = -oy; y < h; y += 160)
       for (let x = -ox; x < w; x += 160)
         ctx.drawImage(tile, x, y);
     ctx.globalAlpha = 1;
 
-    // холодный градинг
+    // пульс сердца по краям экрана при низком рассудке / близкой охоте
+    let heart = 0;
+    const ghH = game.ghost;
+    if (ghH && ghH.state === 'hunt' && ghH.floor === pl.floor) {
+      heart = clamp(1 - Math.hypot(ghH.x - pl.x, ghH.y - pl.y) / (TILE * 14), 0.3, 1);
+    } else if (pl.sanity < 28) heart = (28 - pl.sanity) / 28 * 0.6;
+    if (heart > 0.05) {
+      const beat = Math.max(0, Math.sin(game.time * (3.2 + heart * 2.4)));
+      const rr = Math.hypot(w, h) / 2;
+      const rg = ctx.createRadialGradient(w / 2, h / 2, rr * 0.45, w / 2, h / 2, rr);
+      rg.addColorStop(0, 'rgba(120,0,0,0)');
+      rg.addColorStop(1, `rgba(120,0,0,${beat * heart * 0.5})`);
+      ctx.fillStyle = rg; ctx.fillRect(0, 0, w, h); // красная пульсация краёв в такт сердцу
+    }
+
+    // холодный градинг; при рассудке <20 сползает в болезненно-красный
     ctx.globalCompositeOperation = 'overlay';
-    ctx.fillStyle = 'rgba(40,60,90,0.14)';
+    if (pl.sanity < 20) {
+      const k = (20 - pl.sanity) / 20;
+      ctx.fillStyle = `rgba(${40 + 70 * k},${60 - 40 * k},${90 - 60 * k},0.14)`;
+    } else {
+      ctx.fillStyle = 'rgba(40,60,90,0.14)';
+    }
     ctx.fillRect(0, 0, w, h);
     ctx.globalCompositeOperation = 'source-over';
 

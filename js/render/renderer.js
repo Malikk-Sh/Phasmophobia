@@ -802,12 +802,30 @@ export class Renderer {
     // галлюцинация: тень на краю зрения, тает за долю секунды
     const hal = game.hallucination;
     if (hal && hal.floor === floor) {
-      const a = Math.max(0, hal.t / hal.max) * 0.38;
-      const g = ctx.createRadialGradient(hal.x, hal.y - 6, 2, hal.x, hal.y - 4, 20);
-      g.addColorStop(0, `rgba(4,4,9,${a})`);
-      g.addColorStop(1, 'rgba(4,4,9,0)');
-      ctx.fillStyle = g;
-      ctx.beginPath(); ctx.ellipse(hal.x, hal.y - 4, 11, 19, 0, 0, 7); ctx.fill();
+      const a = Math.max(0, hal.t / hal.max);
+      if (hal.eyes) {
+        // пара тусклых глаз во тьме; гаснут, если игрок посветил на них фонарём
+        const inBeam = player.flashlightOn &&
+          Math.hypot(hal.x - player.x, hal.y - player.y) < TILE * 6 &&
+          Math.abs(((Math.atan2(hal.y - player.y, hal.x - player.x) - player.angle + Math.PI * 3) % (Math.PI * 2)) - Math.PI) < 0.4;
+        if (inBeam) { game.hallucination = null; }
+        else {
+          const glow = a * (0.55 + Math.sin(t * 5) * 0.25);
+          ctx.fillStyle = `rgba(150,20,20,${glow})`;
+          for (const sx of [-3, 3]) {
+            ctx.beginPath(); ctx.ellipse(hal.x + sx, hal.y, 1.8, 1.1, 0, 0, 7); ctx.fill();
+          }
+          ctx.fillStyle = `rgba(255,90,80,${glow})`;
+          for (const sx of [-3, 3]) { ctx.beginPath(); ctx.arc(hal.x + sx, hal.y, 0.7, 0, 7); ctx.fill(); }
+        }
+      } else {
+        const ea = a * 0.38;
+        const g = ctx.createRadialGradient(hal.x, hal.y - 6, 2, hal.x, hal.y - 4, 20);
+        g.addColorStop(0, `rgba(4,4,9,${ea})`);
+        g.addColorStop(1, 'rgba(4,4,9,0)');
+        ctx.fillStyle = g;
+        ctx.beginPath(); ctx.ellipse(hal.x, hal.y - 4, 11, 19, 0, 0, 7); ctx.fill();
+      }
     }
 
     player.draw(ctx, t, game);

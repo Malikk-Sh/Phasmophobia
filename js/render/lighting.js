@@ -42,6 +42,14 @@ export class Lighting {
       }
       return;
     }
+    // фонарик «заикается» короткими сериями в фазе предвестника (omen)
+    if (game.director && game.director.phase === 'omen') {
+      if (this.flickerT <= 0) {
+        this.flicker = Math.random() < 0.25 ? 0.3 + Math.random() * 0.5 : 1;
+        this.flickerT = 0.05 + Math.random() * 0.25;
+      }
+      return;
+    }
     this.flicker = 1;
   }
 
