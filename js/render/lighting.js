@@ -42,6 +42,14 @@ export class Lighting {
       }
       return;
     }
+    // фонарик «заикается» короткими сериями в фазе предвестника (omen)
+    if (game.director && game.director.phase === 'omen') {
+      if (this.flickerT <= 0) {
+        this.flicker = Math.random() < 0.25 ? 0.3 + Math.random() * 0.5 : 1;
+        this.flickerT = 0.05 + Math.random() * 0.25;
+      }
+      return;
+    }
     this.flicker = 1;
   }
 
@@ -141,6 +149,14 @@ export class Lighting {
         (0.45 + Math.sin(game.time * 13) * 0.06) * fl);
       // фургон светится изнутри
       this.punch(world.van.x + world.van.w / 2, world.van.y + world.van.h - TILE * 0.6, TILE * 2.4, 0.5);
+      // светлячки во дворе пробиваются сквозь тьму крошечными огоньками
+      const flies = game.fx.fireflies;
+      if (flies && game.fx.nightDim > 0.05) {
+        for (const f of flies) {
+          const s = game.fx.nightDim * (0.5 + Math.sin(game.time * 3 + f.phase) * 0.5) * 0.55;
+          if (s > 0.03) this.punch(f.x, f.y, TILE * 0.85, s);
+        }
+      }
     }
 
     // размещённое снаряжение

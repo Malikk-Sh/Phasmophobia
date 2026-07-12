@@ -99,18 +99,33 @@ export const worldSim = {
         }
         if (p.z <= 0 && p.vz < 0) {
           p.z = 0;
-          if (Math.abs(p.vz) > 60) {
-            p.vz = -p.vz * 0.3;
-            if (game.player.floor === p.floor &&
-              Math.hypot(p.x - game.player.x, p.y - game.player.y) < TILE * 12) {
-              audio.propImpact(p.type === 'plate' || p.type === 'cup' || p.type === 'bottle', audio.panFor(p.x));
+          const impactV = Math.abs(p.vz);
+          const nearPlayer = (r) => game.player.floor === p.floor &&
+            Math.hypot(p.x - game.player.x, p.y - game.player.y) < TILE * r;
+          if (impactV > 60) {
+            p.vz = impactV * 0.3;
+            if (nearPlayer(12)) {
+              audio.propImpact(p.material || 'wood', audio.panFor(p.x), Math.min(1.4, impactV / 130));
             }
-            if (p.type === 'plate' && Math.abs(p.vz) > 40) p.broken = true;
+            // хрупкое бьётся от сильного удара (порог скорости падения — по предмету)
+            const BREAK_V = { plate: 130, vase: 112, frame: 150 };
+            if (!p.broken && impactV > (BREAK_V[p.type] ?? Infinity)) p.broken = true;
             game.fx.dustBurst(p.x, p.y, p.floor);
           } else {
+            // тихий «клик оседания» после последнего отскока
+            if (impactV > 18 && nearPlayer(10)) {
+              audio.propImpact(p.material || 'wood', audio.panFor(p.x), 0.25);
+            }
             p.vz = 0; p.vx = 0; p.vy = 0;
           }
         }
+      }
+    }
+
+    // затухание тряски подвижной мебели
+    for (const key of [0, -1]) {
+      for (const f of world.furniture[key] || []) {
+        if (f.shakeT > 0) f.shakeT = Math.max(0, f.shakeT - dt);
       }
     }
 

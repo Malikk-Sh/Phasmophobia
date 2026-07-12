@@ -23,7 +23,7 @@ let ambientBus = null, busInput = null, convolver = null, reverbSend = null;
 const PAN_SPREAD = 320; // ~10 тайлов: на этой дистанции звук уходит в край стерео
 
 // таймеры
-const T = { heart: 0, emf: 0, ghostStep: 0, creak: 8, crackle: 0, whis: 20 };
+const T = { heart: 0, emf: 0, ghostStep: 0, creak: 8, crackle: 0, whis: 20, breath: 0, above: 0 };
 
 function now() { return ctx.currentTime; }
 
@@ -264,8 +264,30 @@ export const audio = {
   // ---------- Кадровое обновление ----------
   update(dt, s) {
     if (!this.ready) return;
-    // ducking: под охотой приглушаем фоновый бед, чтобы кульминация «пробивала»
-    if (ambientBus) ambientBus.gain.setTargetAtTime(s.hunt ? 0.42 : 1, now(), 0.35);
+    // ducking: мёртвая тишина перед охотой (predHunt), приглушение под охотой
+    if (ambientBus) {
+      const duckTarget = s.preHunt ? 0.05 : (s.hunt ? 0.42 : 1);
+      ambientBus.gain.setTargetAtTime(duckTarget, now(), s.preHunt ? 0.5 : 0.35);
+    }
+    // дрожащее дыхание игрока (в укрытии / при низком рассудке; чаще, если призрак рядом)
+    if (s.breath > 0.05) {
+      T.breath -= dt;
+      if (T.breath <= 0) {
+        T.breath = 2.6 - s.breath * 1.7 + Math.random() * 0.4;
+        this.playerBreath(s.breath);
+      }
+    }
+    // шаги призрака над головой (игрок в подвале, призрак ходит по первому этажу)
+    if (s.stepsAbove > 0.05) {
+      T.above -= dt;
+      if (T.above <= 0) {
+        T.above = 0.6 + Math.random() * 0.25;
+        const pan = this.panFor(s.aboveX ?? this.listener.x);
+        noise({ dur: 0.14, type: 'lowpass', freq: 150, gain: 0.12 * s.stepsAbove, pan, rate: 0.6, attack: 0.004 });
+        tone({ type: 'sine', freq: 52, dur: 0.12, gain: 0.08 * s.stepsAbove, pan, attack: 0.004 });
+        if (Math.random() < 0.3) setTimeout(() => started && noise({ dur: 0.2, type: 'lowpass', freq: 90, gain: 0.05, pan }), 120); // скрип половицы сверху
+      }
+    }
     // сердцебиение
     if (s.heartbeat > 0.02) {
       T.heart -= dt;
@@ -505,6 +527,38 @@ export const audio = {
     setTimeout(() => started && noise({ dur: 0.5, type: 'bandpass', freq: 1400, q: 2, gain: 0.04 }), 500);
   },
 
+  // Скрежет мебели по полу: ножки дерут доски, тяжёлая версия ниже и дольше
+  furnitureScrape(pan = 0, heavy = false) {
+    if (!this.ready) return;
+    if (playSample('furniture.scrape', { gain: heavy ? 0.6 : 0.45, pan, rate: sampleGain(heavy ? 0.82 : 1, 0.1) })) return;
+    const dur = (heavy ? 0.55 : 0.34) + Math.random() * 0.2;
+    tone({
+      type: 'sawtooth', freq: heavy ? 62 : 104, slide: heavy ? 92 : 150,
+      dur, gain: heavy ? 0.05 : 0.034, vib: 24, vibRate: 8.5, pan, attack: 0.02,
+    });
+    noise({ dur, type: 'bandpass', freq: heavy ? 300 : 520, q: 2.5, gain: 0.05, pan, attack: 0.02, rate: 0.75 });
+    noise({ dur: dur * 0.6, type: 'highpass', freq: 1900, gain: 0.018, pan, attack: 0.04 }); // сухое трение
+    // короткий «дострел» — мебель довернулась
+    if (Math.random() < 0.45) setTimeout(() => started && noise({
+      dur: 0.09, type: 'bandpass', freq: 420, q: 3, gain: 0.04, pan, attack: 0.005,
+    }), dur * 1000 + 90);
+  },
+
+  // Дрожащее дыхание игрока: вдох через нос → выдох; при панике — прерывистое
+  playerBreath(intensity = 0.5) {
+    if (!this.ready) return;
+    if (playSample('player.breath', { gain: 0.4 + intensity * 0.3, rate: sampleGain(1, 0.05) })) return;
+    const shaky = intensity > 0.6;
+    // вдох
+    noise({ dur: 0.3, type: 'bandpass', freq: 720, q: 1.2, gain: 0.04 + intensity * 0.05, attack: 0.08, rate: 0.9 });
+    // выдох (ниже, длиннее), при панике дрожит на два толчка
+    setTimeout(() => {
+      if (!started) return;
+      noise({ dur: 0.4, type: 'bandpass', freq: 460, q: 1.4, gain: 0.045 + intensity * 0.05, attack: 0.05, rate: 0.8 });
+      if (shaky) setTimeout(() => started && noise({ dur: 0.22, type: 'bandpass', freq: 500, q: 1.6, gain: 0.04, attack: 0.02 }), 260);
+    }, 360);
+  },
+
   sensorPing(pan = 0) {
     if (!this.ready) return;
     if (playSample('sensor.ping', { gain: 0.4, pan })) return;
@@ -528,16 +582,71 @@ export const audio = {
     noise({ dur: 0.15, freq: 2000, gain: 0.06, type: 'highpass' });
   },
 
-  propWhoosh() {
+  propWhoosh(pan = 0, power = 1) {
     if (!this.ready) return;
-    if (playSample('prop.whoosh', { gain: 0.45, rate: sampleGain(1, 0.1) })) return;
-    noise({ dur: 0.25, type: 'bandpass', freq: 900, freqEnd: 300, q: 1.5, gain: 0.1 });
+    const k = Math.max(0.3, Math.min(1.4, power));
+    if (playSample('prop.whoosh', { gain: 0.35 + k * 0.15, pan, rate: sampleGain(0.85 + k * 0.2, 0.1) })) return;
+    noise({ dur: 0.16 + k * 0.12, type: 'bandpass', freq: 600 + k * 400, freqEnd: 220, q: 1.5, gain: 0.05 + k * 0.07, pan });
   },
-  propImpact(hard = true, pan = 0) {
+
+  // Удар предмета об пол: звук зависит от материала и силы падения.
+  propImpact(material = 'wood', pan = 0, power = 1) {
     if (!this.ready) return;
-    if (playSample(hard ? 'prop.impact.hard' : 'prop.impact.soft', { gain: hard ? 0.55 : 0.45, pan, rate: sampleGain(1, 0.12) })) return;
-    noise({ dur: 0.12, freq: hard ? 2400 : 500, type: hard ? 'highpass' : 'lowpass', gain: 0.18, pan });
-    tone({ type: 'triangle', freq: hard ? 320 : 120, slide: 60, dur: 0.12, gain: 0.1, pan });
+    const k = Math.max(0.2, Math.min(1.4, power));
+    const legacy = material === 'ceramic' || material === 'glass' || material === 'metal'
+      ? 'prop.impact.hard' : 'prop.impact.soft';
+    if (playAny([`prop.impact.${material}`, legacy], { gain: 0.5 * k, pan, rate: sampleGain(1, 0.12) })) return;
+    switch (material) {
+      case 'ceramic': {
+        // яркий бурст + звенящие партиалы + каскад затухающего дребезга
+        noise({ dur: 0.09, type: 'bandpass', freq: 2800, q: 3, gain: 0.2 * k, pan, attack: 0.001 });
+        tone({ type: 'sine', freq: 1900, dur: 0.16, gain: 0.06 * k, pan, attack: 0.001 });
+        tone({ type: 'sine', freq: 2650, dur: 0.11, gain: 0.035 * k, pan, attack: 0.001 });
+        for (let i = 1; i <= 2 + (k > 0.8 ? 1 : 0); i++) {
+          setTimeout(() => started && noise({
+            dur: 0.05, type: 'bandpass', freq: 3000 + Math.random() * 800, q: 6,
+            gain: 0.08 * k / (i + 0.5), pan: pan + (Math.random() - 0.5) * 0.15, attack: 0.001,
+          }), i * (70 + Math.random() * 60));
+        }
+        break;
+      }
+      case 'glass': {
+        // высокий звон и мелкая «крошка»
+        noise({ dur: 0.1, type: 'highpass', freq: 3800, gain: 0.16 * k, pan, attack: 0.001 });
+        tone({ type: 'sine', freq: 3100, dur: 0.22, gain: 0.05 * k, pan, attack: 0.001 });
+        tone({ type: 'sine', freq: 4300, dur: 0.14, gain: 0.03 * k, pan, attack: 0.001 });
+        for (let i = 1; i <= 3; i++) {
+          setTimeout(() => started && tone({
+            type: 'sine', freq: 2600 + Math.random() * 2200, dur: 0.07,
+            gain: 0.03 * k / i, pan: pan + (Math.random() - 0.5) * 0.2, attack: 0.001,
+          }), i * (55 + Math.random() * 70));
+        }
+        break;
+      }
+      case 'metal': {
+        // лязг: расстроенные партиалы с долгим хвостом
+        noise({ dur: 0.07, type: 'bandpass', freq: 1100, q: 2, gain: 0.16 * k, pan, attack: 0.001 });
+        tone({ type: 'triangle', freq: 620 * sampleGain(1, 0.04), dur: 0.5, gain: 0.07 * k, pan, attack: 0.001 });
+        tone({ type: 'sine', freq: 872 * sampleGain(1, 0.05), dur: 0.42, gain: 0.045 * k, pan, attack: 0.001 });
+        tone({ type: 'sine', freq: 1490 * sampleGain(1, 0.06), dur: 0.3, gain: 0.026 * k, pan, attack: 0.001 });
+        if (k > 0.7) setTimeout(() => started && tone({
+          type: 'triangle', freq: 640, dur: 0.2, gain: 0.03 * k, pan, attack: 0.002,
+        }), 110 + Math.random() * 50);
+        break;
+      }
+      case 'soft': {
+        // приглушённый шлепок
+        noise({ dur: 0.07, type: 'lowpass', freq: 240, gain: 0.14 * k, pan, attack: 0.002, rate: 0.7 });
+        tone({ type: 'sine', freq: 85, slide: 50, dur: 0.09, gain: 0.07 * k, pan, attack: 0.002 });
+        break;
+      }
+      default: { // wood
+        // глухой деревянный бух с коротким верхом
+        noise({ dur: 0.09, type: 'lowpass', freq: 420, gain: 0.17 * k, pan, attack: 0.001 });
+        tone({ type: 'sine', freq: 115, slide: 65, dur: 0.12, gain: 0.1 * k, pan, attack: 0.001 });
+        tone({ type: 'triangle', freq: 245, dur: 0.05, gain: 0.04 * k, pan, attack: 0.001 });
+      }
+    }
   },
 
   writing() {
@@ -673,16 +782,27 @@ export const audio = {
     tone({ type: 'sine', freq: 46, dur: 0.8, gain: 0.2, attack: 0.004 });
   },
 
-  jumpscare() {
+  // Скример: 4 варианта крика под лицо (0 исхудалое, 1 женщина, 2 тень, 3 повешенный)
+  jumpscare(variant = 0) {
     if (!this.ready) return;
-    if (playSample('player.jumpscare', { gain: 0.9 })) return;
-    // мгновенный удар + рваный крик из формант (менее «пищит», более глотка)
+    if (playSample('player.jumpscare', { gain: 0.9, rate: [1, 1.18, 0.82, 0.92][variant] || 1 })) return;
+    // мгновенный удар (общий для всех)
     noise({ dur: 0.14, type: 'lowpass', freq: 500, gain: 0.4, attack: 0.001 });
     tone({ type: 'sine', freq: 60, slide: 28, dur: 1.3, gain: 0.32, attack: 0.001 });
-    for (const [f, g] of [[520, 0.12], [830, 0.09], [1350, 0.05]]) {
-      tone({ type: 'sawtooth', freq: f * 1.15, slide: f * 0.55, dur: 0.9, gain: g, vib: 90, vibRate: 16, attack: 0.005 });
+    // форманты крика зависят от варианта
+    const F = {
+      0: [[520, 0.12], [830, 0.09], [1350, 0.05]],   // хриплая глотка
+      1: [[720, 0.11], [1180, 0.09], [2100, 0.06]],  // высокий женский визг
+      2: [[240, 0.13], [430, 0.1], [760, 0.06]],     // низкий утробный рёв (тень)
+      3: [[300, 0.1], [560, 0.09], [980, 0.05]],     // сдавленный сип (петля)
+    }[variant] || [[520, 0.12], [830, 0.09], [1350, 0.05]];
+    const vib = variant === 1 ? 130 : variant === 2 ? 55 : 90;
+    for (const [f, g] of F) {
+      tone({ type: 'sawtooth', freq: f * 1.15, slide: f * (variant === 2 ? 0.45 : 0.55), dur: 0.9, gain: g, vib, vibRate: 16, attack: 0.005 });
     }
-    noise({ dur: 1.0, type: 'bandpass', freq: 1100, q: 1.2, gain: 0.22, freqEnd: 350, attack: 0.004 });
+    noise({ dur: 1.0, type: 'bandpass', freq: variant === 1 ? 1900 : variant === 2 ? 600 : 1100, q: 1.2, gain: 0.22, freqEnd: 350, attack: 0.004 });
+    // повешенный: захлёбывающийся «дострел» в середине
+    if (variant === 3) setTimeout(() => started && noise({ dur: 0.25, type: 'bandpass', freq: 700, q: 3, gain: 0.14, attack: 0.01 }), 260);
   },
 
   thunder(closeness = 0.5) {
