@@ -135,8 +135,10 @@ export class Lighting {
         this.punch((w.tx + 0.5) * TILE, (w.ty + 0.5) * TILE,
           TILE * (1.9 + bolt * 1.6), 0.16 + bolt * 0.55);
       }
-      // свет крыльца
-      this.punch(9.2 * TILE, 14.4 * TILE, TILE * 2.6, (0.45 + Math.sin(game.time * 13) * 0.06) * fl);
+      // свет крыльца (по данным карты)
+      const P = world.porch;
+      this.punch((P.x + P.w / 2) * TILE, (P.y + P.h / 2) * TILE, TILE * 2.6,
+        (0.45 + Math.sin(game.time * 13) * 0.06) * fl);
       // фургон светится изнутри
       this.punch(world.van.x + world.van.w / 2, world.van.y + world.van.h - TILE * 0.6, TILE * 2.4, 0.5);
     }
@@ -146,6 +148,8 @@ export class Lighting {
       if (it.floor !== player.floor) continue;
       if (it.type === 'camera') this.punch(it.x, it.y, TILE * 0.8, 0.3);
       if (it.type === 'dots') this.punch(it.x, it.y, TILE * 2.6, 0.28 * fl);
+      if (it.type === 'motion') this.punch(it.x, it.y, TILE * (1 + (it.tripT || 0)), 0.26 + (it.tripT || 0) * 0.25);
+      if (it.type === 'sound') this.punch(it.x, it.y, TILE * (0.9 + (it.level || 0) * 1.2), 0.24 + (it.level || 0) * 0.2);
     }
 
     // проклятый предмет тлеет в темноте
@@ -154,8 +158,8 @@ export class Lighting {
         0.28 + Math.sin(game.time * 2.2) * 0.08);
     }
     // ожившие помехи телевизора
-    if (game.tvStaticT > 0 && player.floor === 0) {
-      this.punch(25.6 * TILE, 18.35 * TILE, TILE * 2.4, 0.35 + Math.random() * 0.25);
+    if (game.tvStaticT > 0 && world.tv && world.tv.floor === player.floor) {
+      this.punch(world.tv.x, world.tv.y, TILE * 2.4, 0.35 + Math.random() * 0.25);
     }
 
     // призрак чуть виден в темноте при манифестации

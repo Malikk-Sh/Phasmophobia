@@ -93,7 +93,7 @@ export const menus = {
     $('#briefing').innerHTML = `
       <div class="panel">
         <h2 style="letter-spacing:3px; text-align:center">КОНТРАКТ</h2>
-        <p style="text-align:center; color:#5f7480; margin:4px 0 16px">ул. Уиллоу-Крик, д. 13 — одиночная смена</p>
+        <p style="text-align:center; color:#5f7480; margin:4px 0 16px">${g.dossier.address} — одиночная смена</p>
         <div style="font-size:14px; line-height:1.8; color:#a8b8c2; max-width:440px; margin:0 auto">
           <span style="color:#8a9aa8">ДОСЬЕ:</span> ${g.dossier.name} (${g.dossier.years}) —
           ${g.dossier.death}.<br>

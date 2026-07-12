@@ -6,6 +6,7 @@ import { Camera } from './core/camera.js';
 import { audio } from './core/audio.js';
 import { buildWorld, FLOOR_BASEMENT, OUTSIDE } from './world/house.js';
 import { furnish } from './world/furniture.js';
+import { MAPS } from './world/maps.js';
 import { computeVisibility } from './render/visibility.js';
 import { Lighting } from './render/lighting.js';
 import { FX } from './render/fx.js';
@@ -75,8 +76,14 @@ const game = {
     this.rng = makeRng(this.contractSeed);
     setRng(this.rng); // игровая логика контракта — на сидированном ГСЧ
     this.hintCooldown = 0;
-    this.world = buildWorld();
-    furnish(this.world);
+    // карта контракта: выбор по сид-RNG (setRng уже активен) — партия воспроизводима.
+    // debug-хук: localStorage['phasmo-map']=id принудительно выбирает карту.
+    let forced = null;
+    try { forced = localStorage.getItem('phasmo-map'); } catch { /* приватный режим */ }
+    const blueprint = (forced && MAPS.find(m => m.id === forced)) || rndPick(MAPS);
+    this.blueprint = blueprint;
+    this.world = buildWorld(blueprint);
+    furnish(this.world, blueprint);
     this.renderer = new Renderer(this.world);
     this.player = new Player(this.world);
 
@@ -114,6 +121,7 @@ const game = {
     const last = rndPick(['Волкова', 'Черных', 'Мельников', 'Соколова', 'Громов', 'Зимина', 'Крылов', 'Одинцова'])
       .replace(/а$/, first.endsWith('а') || first.endsWith('я') ? 'а' : '');
     this.dossier = {
+      address: blueprint.address,
       name: `${first} ${last}`,
       years: `${1921 + Math.floor(Math.random() * 40)}–${1978 + Math.floor(Math.random() * 30)}`,
       death: rndPick([
@@ -145,8 +153,8 @@ const game = {
     audio.setAmbience(false, false);
     this.log('Снаряжение — в фургоне. Удачи.');
     // seed контракта для воспроизведения партий (debug)
-    try { console.info(`[contract] seed=${this.contractSeed} ghost=${this.ghost.data.key}`); } catch { /* нет консоли */ }
-    if (localStorage.getItem('phasmo-debug')) this.log(`SEED ${this.contractSeed} · ${this.ghost.data.key}`, 'evidence');
+    try { console.info(`[contract] seed=${this.contractSeed} map=${this.blueprint.id} ghost=${this.ghost.data.key}`); } catch { /* нет консоли */ }
+    if (localStorage.getItem('phasmo-debug')) this.log(`SEED ${this.contractSeed} · ${this.blueprint.id} · ${this.ghost.data.key}`, 'evidence');
   },
 
   checkObjective(key) {
@@ -476,8 +484,8 @@ const game = {
     } else { // кукла
       cu.used = true;
       pl.drainSanity(10);
-      audio.knockRaps(0);
       gh.teleportNearPlayer(this);
+      audio.knockRaps(audio.panFor(gh.x));
       gh.activity = Math.min(10, gh.activity + 5);
       this.log('Кукла повернула голову. Оно рядом.', 'danger');
     }
@@ -647,8 +655,11 @@ const game = {
       const kinds = room && ROOM_FX[room.key];
       if (kinds && pl.alive) {
         const kind = rndPick(kinds);
-        if (kind === 'tv') { this.tvStaticT = 1.15; audio.roomTone('tv', 0); }
-        else audio.roomTone(kind, rndRange(-0.5, 0.5));
+        // «голос» комнаты звучит из её стороны (панорама по центру комнаты)
+        const rc = room.rects[0];
+        const pan = audio.panFor((rc.x + rc.w / 2) * TILE);
+        if (kind === 'tv') { this.tvStaticT = 1.15; audio.roomTone('tv', pan); }
+        else audio.roomTone(kind, pan);
         if (Math.random() < 0.3) pl.drainSanity(0.5);
       }
     }
@@ -670,9 +681,13 @@ const game = {
       huntNear = clamp(1 - d / (TILE * 12), 0, 1);
       heartbeat = clamp(1 - d / (TILE * 14), 0.3, 1);
     } else if (pl.sanity < 25) heartbeat = 0.25;
+    // позиция слушателя для панорамы позиционных звуков
+    audio.setListener(pl.x, pl.y, pl.floor);
     audio.update(dt, {
       heartbeat,
       huntNear,
+      hunt: gh.state === 'hunt',
+      ghostX: gh.x, ghostFloor: gh.floor, // шаги охоты идут из реальной стороны
       // темп шагов призрака: в погоне — частые, у Ревенанта вне погони — редкие тяжёлые
       ghostStepInt: gh.huntPhase === 'chase' ? 0.34
         : (gh.tr.slowSpeed !== undefined ? 1.05 : 0.58),
