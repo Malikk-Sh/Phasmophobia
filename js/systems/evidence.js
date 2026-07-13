@@ -142,13 +142,29 @@ export const worldSim = {
         if (Math.hypot(s.x - gh.x, s.y - gh.y) < 13) {
           if (gh.tr.noSalt) continue; // Мираж не тревожит соль
           s.disturbed = true;
+          // дорожка босых следов уходит в направлении движения призрака:
+          // левая/правая ступня чередуются со смещением от оси, яркость затухает
+          const dir = Math.hypot(gh.x - s.x, gh.y - s.y) > 2
+            ? Math.atan2(gh.y - s.y, gh.x - s.x)
+            : rndRange(0, 6.28);
           s.steps = [];
-          const a = Math.atan2(gh.y - s.y, gh.x - s.x) + Math.PI;
-          for (let i = 1; i <= 3; i++) {
+          for (let i = 1; i <= 5; i++) {
+            const side = i % 2 ? 1 : -1;
             s.steps.push({
-              x: s.x + Math.cos(a) * i * 12 + rndRange(-3, 3),
-              y: s.y + Math.sin(a) * i * 12 + rndRange(-3, 3),
-              a: a + Math.PI / 2 + rndRange(-0.2, 0.2),
+              x: s.x + Math.cos(dir) * i * 13 + Math.cos(dir + Math.PI / 2) * side * 4.5 + rndRange(-1.5, 1.5),
+              y: s.y + Math.sin(dir) * i * 13 + Math.sin(dir + Math.PI / 2) * side * 4.5 + rndRange(-1.5, 1.5),
+              a: dir + rndRange(-0.12, 0.12),
+              fade: 1 - (i - 1) / 5.5,
+            });
+          }
+          // соль разлетелась от пинка: крупинки веером в сторону движения
+          s.scatter = [];
+          for (let i = 0; i < 16; i++) {
+            const sa = dir + rndRange(-1.1, 1.1);
+            const sr = rndRange(5, 18);
+            s.scatter.push({
+              x: s.x + Math.cos(sa) * sr, y: s.y + Math.sin(sa) * sr,
+              r: rndRange(0.5, 1.3),
             });
           }
           gh.activity = Math.min(10, gh.activity + 2);

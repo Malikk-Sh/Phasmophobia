@@ -53,8 +53,8 @@ const willow = {
       ['master', 14.5, 21], ['bath', 21, 21], ['living', 29, 20.5], ['kids', 37.5, 21],
     ],
     switches: [
-      ['garage', 15.4, 12.4], ['utility', 22.3, 12.4], ['kitchen', 26.3, 12.4], ['dining', 37.3, 12.4],
-      ['hall', 13.2, 14.4], ['master', 15.3, 17.6], ['bath', 21.3, 17.6],
+      ['garage', 15.4, 13.18], ['utility', 22.3, 13.18], ['kitchen', 26.3, 13.18], ['dining', 37.3, 13.18],
+      ['hall', 13.2, 13.82], ['master', 15.3, 17.6], ['bath', 21.3, 17.6],
       ['living', 30.6, 17.6], ['kids', 38.2, 17.6],
     ],
     breaker: { x: 11.5, y: 7.4 },
@@ -73,7 +73,7 @@ const willow = {
       { tx: 15, ty: 12, orient: 'v' },// мастерская-котельная
     ],
     lamps: [['cellar', 9, 6], ['workshop', 9, 12.5], ['boiler', 21.5, 9]],
-    switches: [['cellar', 5.6, 3.7], ['workshop', 9.3, 9.7], ['boiler', 16.4, 5.8]],
+    switches: [['cellar', 7.4, 9.15], ['workshop', 9.3, 9.82], ['boiler', 15.55, 6.4]],
   },
 
   stairs: {
@@ -90,7 +90,7 @@ const willow = {
   van: { x: 1.8, y: 9, w: 3, h: 6 },
   spawn: { x: 5.7, y: 15.6 },
   porch: { x: 7, y: 14, w: 3, h: 3 },
-  tv: { x: 25.6, y: 18.35, floor: 0 },
+  tv: { x: 25.6, y: 18.5, floor: 0 },
 
   furniture: [
     // Гараж
@@ -306,9 +306,9 @@ const oakgrove = {
       ['master', 14, 24], ['bath', 24, 24], ['kids', 34, 24],
     ],
     switches: [ // у дверей/арок своей комнаты — легко найти на ощупь
-      ['garage', 15, 12.4], ['kitchen', 22.4, 12.4], ['dining', 32.9, 12.4],
-      ['utility', 10.4, 16.1], ['hall', 20.4, 15.5], ['living', 30.4, 15.5],
-      ['master', 14.6, 22.3], ['bath', 22.3, 22.4], ['kids', 32.8, 22.4],
+      ['garage', 15, 13.18], ['kitchen', 22.4, 13.18], ['dining', 32.9, 13.18],
+      ['utility', 9.82, 16.1], ['hall', 19.82, 15.5], ['living', 29.82, 15.5],
+      ['master', 15.4, 21.82], ['bath', 22.3, 21.82], ['kids', 32.8, 21.82],
     ],
     breaker: { x: 10.5, y: 6.4 },
   },
@@ -326,7 +326,7 @@ const oakgrove = {
       { tx: 14, ty: 11, orient: 'v' }, // котельная-мастерская
     ],
     lamps: [['cellar', 8, 5], ['boiler', 8, 11.5], ['workshop', 20, 8]],
-    switches: [['cellar', 5, 3.6], ['boiler', 6.6, 9.3], ['workshop', 18.6, 3.5]],
+    switches: [['cellar', 7.4, 8.18], ['boiler', 6.6, 8.84], ['workshop', 14.55, 6.4]],
   },
 
   stairs: {
@@ -343,7 +343,7 @@ const oakgrove = {
   van: { x: 2, y: 14, w: 3, h: 6 },
   spawn: { x: 6.5, y: 17 },
   porch: { x: 6, y: 16, w: 3, h: 3 },
-  tv: { x: 34, y: 20, floor: 0 },
+  tv: { x: 33.75, y: 19.62, floor: 0 },
 
   furniture: [
     // Гараж (TL)
@@ -384,7 +384,7 @@ const oakgrove = {
     // Спальня (BL)
     ['rugRect', 0, 10.6, 22.6, 4.0, 3.0, { solid: false }],
     ['bedDouble', 0, 10.4, 22.2, 2.0, 3.0],
-    ['nightstand', 0, 15.2, 22.25, 0.7, 0.7],
+    ['nightstand', 0, 16.2, 22.25, 0.7, 0.7],
     ['wardrobe', 0, 17.0, 24.0, 0.92, 2.0, { tall: true, hide: true, name: 'Гардероб' }],
     ['dresser', 0, 10.4, 25.2, 1.9, 0.7],
     ['floorlamp', 0, 14.6, 25.7, 0.8, 0.8],
@@ -395,7 +395,7 @@ const oakgrove = {
     // Детская (BR)
     ['rugRound', 0, 31.0, 23.0, 2.9, 2.6, { solid: false }],
     ['bedSingle', 0, 30.15, 22.2, 1.45, 2.5],
-    ['toychest', 0, 33.2, 22.25, 1.25, 0.9],
+    ['toychest', 0, 30.3, 25.85, 1.25, 0.9],
     ['desk', 0, 37.0, 22.3, 0.9, 1.9],
     ['wardrobe', 0, 35.6, 24.9, 1.7, 1.0, { tall: true, hide: true, name: 'Шкаф', rot: 0 }],
     // Подвал: кладовая (лестница вверх cols 3..4, rows 3..5)
@@ -537,9 +537,9 @@ const ravenhill = {
       ['master', 14, 23.5], ['bath', 24, 23.5], ['kids', 34, 23.5],
     ],
     switches: [ // у дверей/арок своей комнаты — легко найти на ощупь
-      ['garage', 13.2, 10.4], ['kitchen', 20.4, 7.5], ['dining', 33.2, 10.4],
-      ['utility', 10.4, 14.2], ['hall', 21.35, 15.7], ['living', 33.4, 12.4],
-      ['master', 14.6, 21.4], ['bath', 22.4, 21.4], ['kids', 34.8, 21.4],
+      ['garage', 13.2, 11.18], ['kitchen', 19.8, 6.5], ['dining', 33.2, 11.18],
+      ['utility', 9.82, 14.2], ['hall', 20.82, 14.5], ['living', 33.4, 11.82],
+      ['master', 13.4, 20.82], ['bath', 22.4, 20.82], ['kids', 35.4, 20.82],
     ],
     breaker: { x: 10.5, y: 6.4 },
   },
@@ -557,7 +557,7 @@ const ravenhill = {
       { tx: 15, ty: 8, orient: 'h' },  // мастерская-котельная
     ],
     lamps: [['cellar', 6, 8], ['workshop', 15, 5], ['boiler', 19, 11]],
-    switches: [['cellar', 10.3, 5.5], ['workshop', 16, 3.6], ['boiler', 14.2, 9.5]],
+    switches: [['cellar', 11.18, 6.5], ['workshop', 16.4, 8.18], ['boiler', 14.4, 8.84]],
   },
 
   stairs: {
@@ -574,7 +574,7 @@ const ravenhill = {
   van: { x: 2, y: 12, w: 3, h: 6 },
   spawn: { x: 6.5, y: 15 },
   porch: { x: 6, y: 14, w: 3, h: 3 },
-  tv: { x: 34, y: 18, floor: 0 },
+  tv: { x: 33.75, y: 18.64, floor: 0 },
 
   furniture: [
     // Гараж (TL)
@@ -614,7 +614,7 @@ const ravenhill = {
     // Спальня (BL)
     ['rugRect', 0, 10.6, 21.6, 4.0, 2.8, { solid: false }],
     ['bedDouble', 0, 10.4, 21.2, 2.0, 3.0],
-    ['nightstand', 0, 15.2, 21.25, 0.7, 0.7],
+    ['nightstand', 0, 16.3, 21.25, 0.7, 0.7],
     ['wardrobe', 0, 17.0, 23.5, 0.92, 2.0, { tall: true, hide: true, name: 'Гардероб' }],
     ['dresser', 0, 10.4, 25.2, 1.9, 0.7],
     ['floorlamp', 0, 15.6, 25.4, 0.8, 0.8],
@@ -624,8 +624,8 @@ const ravenhill = {
     ['sinkCab', 0, 26.4, 21.2, 1.4, 0.8],
     // Детская (BR)
     ['rugRound', 0, 31.0, 22.5, 2.9, 2.4, { solid: false }],
-    ['bedSingle', 0, 30.15, 21.2, 1.45, 2.5],
-    ['toychest', 0, 33.2, 21.25, 1.25, 0.9],
+    ['bedSingle', 0, 31.4, 21.2, 1.45, 2.5],
+    ['toychest', 0, 30.3, 25.7, 1.25, 0.9],
     ['desk', 0, 37.0, 21.3, 0.9, 1.9],
     ['wardrobe', 0, 35.6, 24.9, 1.7, 1.0, { tall: true, hide: true, name: 'Шкаф', rot: 0 }],
     // Подвал: кладовая (лестница вверх cols 3..4 rows 3..5)
@@ -736,13 +736,13 @@ export const CATACOMBS = {
       { tx: 18, ty: 7, orient: 'h' },  // мастерская↔котельная (кольцо!)
     ],
     lamps: [['cellar', 7, 5], ['workshop', 19, 5], ['crypt', 7, 11.5], ['boiler', 19, 11.5]],
-    switches: [['cellar', 5.6, 3.6], ['workshop', 12.4, 3.6], ['crypt', 3.4, 8.6], ['boiler', 12.4, 8.6]],
+    switches: [['cellar', 5.4, 7.18], ['workshop', 11.72, 4.4], ['crypt', 5.4, 7.82], ['boiler', 19.4, 7.82]],
   },
   stairsUp: { tiles: { x: 3, y: 3, w: 2, h: 3 }, trigger: { x: 3, y: 3, w: 2, h: 1 } },
   landing: { x: 3.9, y: 5.6 }, // куда прибывает спуск
   furniture: [
     ['barrel', -1, 9.6, 3.3, 0.95, 0.95],
-    ['crate', -1, 5.6, 5.6, 1.1, 1.1],
+    ['crate', -1, 8.6, 5.6, 1.1, 1.1],
     ['shelfTall', -1, 13.1, 3.1, 2.6, 0.8, { tall: true }],
     ['workbench', -1, 21.1, 3.1, 3.0, 0.9],
     ['locker', -1, 24.9, 3.15, 0.9, 1.7, { tall: true, hide: true, name: 'Шкафчик' }],
