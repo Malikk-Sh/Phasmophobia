@@ -6,7 +6,7 @@ import { Camera } from './core/camera.js';
 import { audio } from './core/audio.js';
 import { buildWorld, FLOOR_BASEMENT, OUTSIDE } from './world/house.js';
 import { furnish } from './world/furniture.js';
-import { MAPS } from './world/maps.js';
+import { MAPS, composeBlueprint } from './world/maps.js';
 import { computeVisibility } from './render/visibility.js';
 import { Lighting } from './render/lighting.js';
 import { FX } from './render/fx.js';
@@ -27,6 +27,7 @@ const ROOM_FX = {
   bath: ['drip'], kitchen: ['dish', 'fridge'], dining: ['dish'], living: ['tv'],
   master: ['bed'], kids: ['toy'], garage: ['metal'], utility: ['metal', 'drip'],
   cellar: ['drip', 'pipe'], workshop: ['metal', 'pipe'], boiler: ['pipe', 'drip'],
+  crypt: ['drip', 'pipe'], // погреб в катакомбах
 };
 
 const OBJECTIVE_POOL = [
@@ -76,11 +77,17 @@ const game = {
     this.rng = makeRng(this.contractSeed);
     setRng(this.rng); // игровая логика контракта — на сидированном ГСЧ
     this.hintCooldown = 0;
-    // карта контракта: выбор по сид-RNG (setRng уже активен) — партия воспроизводима.
-    // debug-хук: localStorage['phasmo-map']=id принудительно выбирает карту.
-    let forced = null;
-    try { forced = localStorage.getItem('phasmo-map'); } catch { /* приватный режим */ }
-    const blueprint = (forced && MAPS.find(m => m.id === forced)) || rndPick(MAPS);
+    // карта и вариант подвала: выбор по сид-RNG (setRng уже активен) — партия
+    // воспроизводима. debug-хуки: localStorage['phasmo-map'] и ['phasmo-basement'].
+    let forced = null, forcedB = null;
+    try {
+      forced = localStorage.getItem('phasmo-map');
+      forcedB = localStorage.getItem('phasmo-basement');
+    } catch { /* приватный режим */ }
+    const baseBp = (forced && MAPS.find(m => m.id === forced)) || rndPick(MAPS);
+    const basementId = (forcedB === 'native' || forcedB === 'catacombs')
+      ? forcedB : rndPick(['native', 'catacombs']);
+    const blueprint = composeBlueprint(baseBp, basementId);
     this.blueprint = blueprint;
     this.world = buildWorld(blueprint);
     furnish(this.world, blueprint);
@@ -153,8 +160,8 @@ const game = {
     audio.setAmbience(false, false);
     this.log('Снаряжение — в фургоне. Удачи.');
     // seed контракта для воспроизведения партий (debug)
-    try { console.info(`[contract] seed=${this.contractSeed} map=${this.blueprint.id} ghost=${this.ghost.data.key}`); } catch { /* нет консоли */ }
-    if (localStorage.getItem('phasmo-debug')) this.log(`SEED ${this.contractSeed} · ${this.blueprint.id} · ${this.ghost.data.key}`, 'evidence');
+    try { console.info(`[contract] seed=${this.contractSeed} map=${this.blueprint.id} basement=${this.blueprint.basementId} ghost=${this.ghost.data.key}`); } catch { /* нет консоли */ }
+    if (localStorage.getItem('phasmo-debug')) this.log(`SEED ${this.contractSeed} · ${this.blueprint.id}/${this.blueprint.basementId} · ${this.ghost.data.key}`, 'evidence');
   },
 
   checkObjective(key) {

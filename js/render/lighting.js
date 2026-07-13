@@ -133,15 +133,27 @@ export class Lighting {
     // лампы комнат
     const breakerOn = world.breaker.on;
     for (const room of world.rooms) {
-      if (room.floor !== player.floor || !room.lightOn || !breakerOn || room.lightBroken) continue;
+      if (room.floor !== player.floor) continue;
+      // фосфорная точка выключателя видна и в кромешной тьме (крошечный пунш)
+      if (room.switch) this.punch(room.switch.x, room.switch.y - 3, 13, 0.6);
+      if (!room.lightOn || !breakerOn || room.lightBroken) continue;
       for (const l of room.lamps) this.punch(l.x, l.y, TILE * 5.6, 0.93 * fl);
     }
 
-    // лунный свет из окон (первый этаж); при молнии окна вспыхивают
+    // лунный свет из окон (первый этаж); при молнии окна вспыхивают.
+    // Свет реально «проходит» внутрь: пул на подоконнике + пятно в комнате.
     if (player.floor === 0) {
+      const grid = world.floors[0];
       for (const w of world.windows) {
-        this.punch((w.tx + 0.5) * TILE, (w.ty + 0.5) * TILE,
-          TILE * (1.9 + bolt * 1.6), 0.16 + bolt * 0.55);
+        const cx = (w.tx + 0.5) * TILE, cy = (w.ty + 0.5) * TILE;
+        // внутренняя сторона окна — где комната
+        let ix = 0, iy = 0;
+        if (w.orient === 'h') iy = grid.roomAt(w.tx, w.ty + 1) >= 0 ? 1 : -1;
+        else ix = grid.roomAt(w.tx + 1, w.ty) >= 0 ? 1 : -1;
+        this.punch(cx, cy, TILE * (2.1 + bolt * 1.6), 0.3 + bolt * 0.55);
+        // пятно лунного света на полу комнаты
+        this.punch(cx + ix * TILE * 1.4, cy + iy * TILE * 1.4,
+          TILE * (2.3 + bolt * 1.2), 0.2 + bolt * 0.4);
       }
       // свет крыльца (по данным карты)
       const P = world.porch;

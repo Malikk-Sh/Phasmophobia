@@ -96,9 +96,12 @@ export class Renderer {
       c.fillStyle = '#11161d';
       if (w.orient === 'h') { c.fillRect(x + 5, y + TILE / 2 - 3, TILE - 10, 6); }
       else { c.fillRect(x + TILE / 2 - 3, y + 5, 6, TILE - 10); }
-      c.fillStyle = 'rgba(130,160,200,.18)';
+      c.fillStyle = 'rgba(150,180,220,.34)';
       if (w.orient === 'h') { c.fillRect(x + 7, y + TILE / 2 - 1.5, TILE - 14, 3); }
       else { c.fillRect(x + TILE / 2 - 1.5, y + 7, 3, TILE - 14); }
+      c.fillStyle = 'rgba(170,200,240,.5)'; // лунный блик на стекле
+      if (w.orient === 'h') { c.fillRect(x + 9, y + TILE / 2 - 0.8, (TILE - 18) * 0.4, 1.6); }
+      else { c.fillRect(x + TILE / 2 - 0.8, y + 9, 1.6, (TILE - 18) * 0.4); }
     }
 
     // ворота гаража (декор)
@@ -262,6 +265,18 @@ export class Renderer {
         c.strokeStyle = 'rgba(12,10,8,.4)';
         c.lineWidth = 2.5;
         c.strokeRect(r.x * TILE + 1.5, r.y * TILE + 1.5, r.w * TILE - 3, r.h * TILE - 3);
+      }
+      // выключатель: светлая пластина на стене (раньше был невидим!)
+      const sw = room.switch;
+      if (sw) {
+        c.fillStyle = 'rgba(0,0,0,.35)';
+        c.fillRect(sw.x - 2.4, sw.y - 3.4, 6.8, 8.8);
+        c.fillStyle = '#c9c2ae';
+        c.fillRect(sw.x - 3, sw.y - 4, 6, 8);
+        c.strokeStyle = 'rgba(0,0,0,.45)'; c.lineWidth = 0.8;
+        c.strokeRect(sw.x - 3, sw.y - 4, 6, 8);
+        c.fillStyle = '#8a8574';
+        c.fillRect(sw.x - 1.1, sw.y - 1.6, 2.2, 3.2); // клавиша
       }
       // потолочные светильники (плафон виден всегда)
       for (const l of room.lamps) {
@@ -708,6 +723,17 @@ export class Renderer {
 
     // подвижная мебель: не запечена в статику; трясётся, когда призрак её дёргает
     this.drawMovableFurniture(ctx, world, floor, t);
+
+    // фосфорные точки выключателей: мягко светятся в темноте, чтобы их найти
+    for (const room of world.rooms) {
+      if (room.floor !== floor || !room.switch) continue;
+      const sw = room.switch;
+      const pulse = 0.6 + Math.sin(t * 2.1 + room.id) * 0.25;
+      ctx.fillStyle = `rgba(140,235,170,${pulse * 0.35})`; // ореол
+      ctx.beginPath(); ctx.arc(sw.x, sw.y - 3, 2.6, 0, 7); ctx.fill();
+      ctx.fillStyle = `rgba(170,255,190,${pulse})`;
+      ctx.beginPath(); ctx.arc(sw.x, sw.y - 3, 1.3, 0, 7); ctx.fill();
+    }
 
     // тёплое свечение включённых ламп (под слоем тьмы)
     if (world.breaker.on) {
