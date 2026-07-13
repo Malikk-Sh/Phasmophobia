@@ -134,10 +134,17 @@ export class Lighting {
     const breakerOn = world.breaker.on;
     for (const room of world.rooms) {
       if (room.floor !== player.floor) continue;
-      // фосфорная точка выключателя видна и в кромешной тьме (крошечный пунш)
-      if (room.switch) this.punch(room.switch.x, room.switch.y - 3, 13, 0.6);
-      if (!room.lightOn || !breakerOn || room.lightBroken) continue;
+      const lit = room.lightOn && breakerOn && !room.lightBroken;
+      // фосфор выключателя светится только в темноте (гаснет при свете комнаты)
+      if (room.switch && !lit) this.punch(room.switch.x, room.switch.y - 3, 13, 0.6);
+      if (!lit) continue;
       for (const l of room.lamps) this.punch(l.x, l.y, TILE * 5.6, 0.93 * fl);
+    }
+    // щиток-маяк: обесточенный тревожно мигает красным пятнышком в темноте
+    if (world.breaker.floor === player.floor) {
+      const br = world.breaker;
+      if (!br.on) this.punch(br.x + 2.8, br.y - 4.5, 16, Math.sin(game.time * 7) > 0 ? 0.75 : 0.15);
+      else this.punch(br.x + 2.8, br.y - 4.5, 9, 0.4);
     }
 
     // лунный свет из окон (первый этаж); при молнии окна вспыхивают.

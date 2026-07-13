@@ -153,13 +153,30 @@ const DRAW = {
     else { ctx.fillRect(-4, -h / 2 + 6, 8, 9); ctx.fillRect(-3, 0, 7, 8); ctx.fillRect(-4, h / 2 - 14, 8, 8); }
   },
   locker(ctx, w, h) {
+    // вид сверху: металлическая крышка с фаской и заклёпками по углам
     shade(ctx, w, h);
-    const g = ctx.createLinearGradient(-w / 2, 0, w / 2, 0);
-    g.addColorStop(0, '#37444d'); g.addColorStop(.5, '#485862'); g.addColorStop(1, '#2c363e');
-    ctx.fillStyle = g; rr(ctx, -w / 2, -h / 2, w, h, 3); ctx.fill();
-    ctx.strokeStyle = 'rgba(0,0,0,.5)'; ctx.lineWidth = 1.5;
-    ctx.beginPath(); ctx.moveTo(0, -h / 2 + 3); ctx.lineTo(0, h / 2 - 3); ctx.stroke();
-    ctx.fillStyle = '#1c2429'; ctx.fillRect(-w / 4 - 1, -h / 6, 2, 6); ctx.fillRect(w / 4 - 1, -h / 6, 2, 6);
+    const vert = h >= w;
+    const g = vert
+      ? ctx.createLinearGradient(-w / 2, 0, w / 2, 0)
+      : ctx.createLinearGradient(0, -h / 2, 0, h / 2);
+    g.addColorStop(0, '#3a474f'); g.addColorStop(0.45, '#4e5e68'); g.addColorStop(1, '#2c363e');
+    ctx.fillStyle = g; rr(ctx, -w / 2, -h / 2, w, h, 2); ctx.fill();
+    ctx.strokeStyle = 'rgba(0,0,0,.5)'; ctx.lineWidth = 1.2;
+    ctx.strokeRect(-w / 2 + 1, -h / 2 + 1, w - 2, h - 2);       // фаска
+    ctx.strokeStyle = 'rgba(190,215,230,.14)';
+    ctx.strokeRect(-w / 2 + 2.5, -h / 2 + 2.5, w - 5, h - 5);   // блик кромки
+    ctx.fillStyle = '#222b31';                                   // заклёпки
+    for (const [sx, sy] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) {
+      ctx.beginPath(); ctx.arc(sx * (w / 2 - 3.4), sy * (h / 2 - 3.4), 1, 0, 7); ctx.fill();
+    }
+    // вентиляционные прорези ближе к фронтальной длинной стороне
+    ctx.strokeStyle = 'rgba(15,20,24,.6)'; ctx.lineWidth = 1;
+    for (let i = -1; i <= 1; i++) {
+      ctx.beginPath();
+      if (vert) { ctx.moveTo(w / 2 - 5, i * 5 - 2); ctx.lineTo(w / 2 - 5, i * 5 + 2); }
+      else { ctx.moveTo(i * 5 - 2, h / 2 - 5); ctx.lineTo(i * 5 + 2, h / 2 - 5); }
+      ctx.stroke();
+    }
   },
   tires(ctx, w) {
     ctx.fillStyle = 'rgba(0,0,0,.4)'; ctx.beginPath(); ctx.arc(2, 3, w * .45, 0, 7); ctx.fill();
@@ -273,12 +290,25 @@ const DRAW = {
   },
   console(ctx, w, h) { DRAW.sideboard(ctx, w, h); ctx.fillStyle = '#c8bd9d'; ctx.beginPath(); ctx.arc(-w / 4, 0, 4, 0, 7); ctx.fill(); },
   closet(ctx, w, h) {
+    // вид сверху: тёмная деревянная крышка с фаской и досками вдоль длинной оси
     shade(ctx, w, h);
-    ctx.fillStyle = '#4c3a26'; rr(ctx, -w / 2, -h / 2, w, h, 3); ctx.fill();
-    ctx.fillStyle = '#5f4a31'; rr(ctx, -w / 2 + 2, -h / 2 + 2, w - 4, h - 4, 2); ctx.fill();
-    ctx.strokeStyle = 'rgba(0,0,0,.4)'; ctx.lineWidth = 1.5;
-    ctx.beginPath(); ctx.moveTo(0, -h / 2 + 3); ctx.lineTo(0, h / 2 - 3); ctx.stroke();
-    ctx.fillStyle = '#2e2417'; ctx.fillRect(-6, -2, 3, 5); ctx.fillRect(3, -2, 3, 5);
+    const vert = h >= w;
+    const g = vert
+      ? ctx.createLinearGradient(-w / 2, 0, w / 2, 0)
+      : ctx.createLinearGradient(0, -h / 2, 0, h / 2);
+    g.addColorStop(0, '#503d27'); g.addColorStop(0.5, '#614b30'); g.addColorStop(1, '#42311d');
+    ctx.fillStyle = g; rr(ctx, -w / 2, -h / 2, w, h, 2); ctx.fill();
+    ctx.strokeStyle = 'rgba(0,0,0,.45)'; ctx.lineWidth = 1.2;
+    ctx.strokeRect(-w / 2 + 1, -h / 2 + 1, w - 2, h - 2);
+    ctx.strokeStyle = 'rgba(255,235,200,.1)';
+    ctx.strokeRect(-w / 2 + 2.5, -h / 2 + 2.5, w - 5, h - 5);
+    ctx.strokeStyle = 'rgba(0,0,0,.25)'; ctx.lineWidth = 0.8;
+    for (let i = 1; i < 3; i++) {
+      ctx.beginPath();
+      if (vert) { ctx.moveTo(-w / 2 + i * w / 3, -h / 2 + 2); ctx.lineTo(-w / 2 + i * w / 3, h / 2 - 2); }
+      else { ctx.moveTo(-w / 2 + 2, -h / 2 + i * h / 3); ctx.lineTo(w / 2 - 2, -h / 2 + i * h / 3); }
+      ctx.stroke();
+    }
   },
   coatrack(ctx, w) {
     ctx.fillStyle = '#332818'; ctx.beginPath(); ctx.arc(0, 0, w * .35, 0, 7); ctx.fill();
@@ -315,16 +345,33 @@ const DRAW = {
     ctx.fillStyle = '#c8b98a'; ctx.beginPath(); ctx.arc(0, 0, w * .18, 0, 7); ctx.fill(); // лампа
   },
   wardrobe(ctx, w, h) {
+    // вид сверху: массивная деревянная крышка — фаска, доски вдоль длинной
+    // оси, тёмный карниз по фронтальной стороне (никаких дверец «лицом вверх»)
     shade(ctx, w, h);
-    const g = ctx.createLinearGradient(-w / 2, 0, w / 2, 0);
-    g.addColorStop(0, '#54402a'); g.addColorStop(.5, '#66502f'); g.addColorStop(1, '#48371f');
-    ctx.fillStyle = g; rr(ctx, -w / 2, -h / 2, w, h, 3); ctx.fill();
-    ctx.strokeStyle = 'rgba(0,0,0,.45)'; ctx.lineWidth = 1.5;
-    if (h >= w) { ctx.beginPath(); ctx.moveTo(0, -h / 2 + 3); ctx.lineTo(0, h / 2 - 3); ctx.stroke(); }
-    else { ctx.beginPath(); ctx.moveTo(-w / 6, -h / 2 + 3); ctx.lineTo(-w / 6, h / 2 - 3); ctx.moveTo(w / 6, -h / 2 + 3); ctx.lineTo(w / 6, h / 2 - 3); ctx.stroke(); }
-    ctx.fillStyle = '#c8b98a';
-    if (h >= w) { ctx.fillRect(-4, -3, 2, 6); ctx.fillRect(2, -3, 2, 6); }
-    else { ctx.fillRect(-w / 6 - 5, -2, 4, 4); ctx.fillRect(w / 6 + 2, -2, 4, 4); }
+    const vert = h >= w;
+    const g = vert
+      ? ctx.createLinearGradient(-w / 2, 0, w / 2, 0)
+      : ctx.createLinearGradient(0, -h / 2, 0, h / 2);
+    g.addColorStop(0, '#5a4429'); g.addColorStop(0.5, '#6d5533'); g.addColorStop(1, '#4a381f');
+    ctx.fillStyle = g; rr(ctx, -w / 2, -h / 2, w, h, 2.5); ctx.fill();
+    // фаска и блик кромки
+    ctx.strokeStyle = 'rgba(0,0,0,.5)'; ctx.lineWidth = 1.3;
+    ctx.strokeRect(-w / 2 + 1, -h / 2 + 1, w - 2, h - 2);
+    ctx.strokeStyle = 'rgba(255,235,200,.12)';
+    ctx.strokeRect(-w / 2 + 2.6, -h / 2 + 2.6, w - 5.2, h - 5.2);
+    // доски крышки вдоль длинной оси
+    ctx.strokeStyle = 'rgba(0,0,0,.24)'; ctx.lineWidth = 0.8;
+    const n = 3;
+    for (let i = 1; i < n; i++) {
+      ctx.beginPath();
+      if (vert) { ctx.moveTo(-w / 2 + i * w / n, -h / 2 + 2); ctx.lineTo(-w / 2 + i * w / n, h / 2 - 2); }
+      else { ctx.moveTo(-w / 2 + 2, -h / 2 + i * h / n); ctx.lineTo(w / 2 - 2, -h / 2 + i * h / n); }
+      ctx.stroke();
+    }
+    // тёмный карниз-рёбрышко по фронтальной длинной стороне (намёк на фасад)
+    ctx.fillStyle = 'rgba(30,22,12,.55)';
+    if (vert) ctx.fillRect(w / 2 - 2.6, -h / 2 + 2, 1.6, h - 4);
+    else ctx.fillRect(-w / 2 + 2, h / 2 - 2.6, w - 4, 1.6);
   },
   dresser(ctx, w, h) { DRAW.sideboard(ctx, w, h); },
   tub(ctx, w, h) {

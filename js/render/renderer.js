@@ -659,52 +659,107 @@ export class Renderer {
 
   paintVan(c) {
     const v = this.world.van;
+    const cx = v.x + v.w / 2;
     c.save();
-    // тень
-    c.fillStyle = 'rgba(0,0,0,.4)';
-    c.beginPath(); c.ellipse(v.x + v.w / 2 + 5, v.y + v.h / 2 + 7, v.w * 0.62, v.h * 0.54, 0, 0, 7); c.fill();
-    // колёса
-    c.fillStyle = '#0e1114';
-    for (const wy of [v.y + 14, v.y + v.h - 40]) {
-      c.fillRect(v.x - 4, wy, 8, 26); c.fillRect(v.x + v.w - 4, wy, 8, 26);
-    }
-    // кузов
-    const g = c.createLinearGradient(v.x, 0, v.x + v.w, 0);
-    g.addColorStop(0, '#2c363d'); g.addColorStop(.5, '#465661'); g.addColorStop(1, '#242d33');
-    c.fillStyle = g;
     const rr = (x, y, w, h, r) => { c.beginPath(); c.moveTo(x + r, y); c.arcTo(x + w, y, x + w, y + h, r); c.arcTo(x + w, y + h, x, y + h, r); c.arcTo(x, y + h, x, y, r); c.arcTo(x, y, x + w, y, r); c.closePath(); };
-    rr(v.x, v.y, v.w, v.h, 12); c.fill();
-    // кабина (север)
-    c.fillStyle = '#12181d';
-    rr(v.x + 6, v.y + 6, v.w - 12, 22, 6); c.fill();
-    c.fillStyle = 'rgba(120,160,190,.15)';
-    rr(v.x + 8, v.y + 8, v.w - 16, 12, 4); c.fill();
-    // открытые задние двери + тёплый свет
-    c.fillStyle = '#39464f';
-    c.fillRect(v.x - 16, v.y + v.h - 30, 16, 28);
-    c.fillRect(v.x + v.w, v.y + v.h - 30, 16, 28);
-    const lg = c.createRadialGradient(v.x + v.w / 2, v.y + v.h - 8, 4, v.x + v.w / 2, v.y + v.h - 8, 60);
-    lg.addColorStop(0, 'rgba(255,200,120,.35)'); lg.addColorStop(1, 'rgba(255,200,120,0)');
-    c.fillStyle = lg;
-    c.fillRect(v.x - 30, v.y + v.h - 40, v.w + 60, 90);
-    // интерьер: стойка оборудования
-    c.fillStyle = '#1a222a';
-    c.fillRect(v.x + 6, v.y + v.h - 34, v.w - 12, 30);
-    c.fillStyle = '#0f3f2c';
-    c.fillRect(v.x + 10, v.y + v.h - 30, 18, 12); // монитор
-    c.fillStyle = '#c8842e';
-    c.fillRect(v.x + 34, v.y + v.h - 28, 8, 8);
-    c.fillStyle = '#8a4436';
-    c.fillRect(v.x + 48, v.y + v.h - 30, 10, 12);
-    // логотип
+    // тень
+    c.fillStyle = 'rgba(0,0,0,.45)';
+    c.beginPath(); c.ellipse(cx + 6, v.y + v.h / 2 + 8, v.w * 0.66, v.h * 0.56, 0, 0, 7); c.fill();
+    // колёса с дисками (видны из-под кузова)
+    for (const wy of [v.y + 12, v.y + v.h - 38]) {
+      for (const wx of [v.x - 5, v.x + v.w - 4]) {
+        c.fillStyle = '#0a0d10'; rr(wx, wy, 9, 27, 4); c.fill();
+        c.fillStyle = '#2e353b'; c.fillRect(wx + 2.5, wy + 9, 4, 9); // диск
+      }
+    }
+    // кузов: металл с продольными бликами
+    const g = c.createLinearGradient(v.x, 0, v.x + v.w, 0);
+    g.addColorStop(0, '#242e35'); g.addColorStop(0.18, '#3d4c56');
+    g.addColorStop(0.5, '#54666f'); g.addColorStop(0.82, '#38454d'); g.addColorStop(1, '#1e262c');
+    c.fillStyle = g; rr(v.x, v.y, v.w, v.h, 11); c.fill();
+    c.strokeStyle = 'rgba(0,0,0,.55)'; c.lineWidth = 1.5;
+    rr(v.x + 0.75, v.y + 0.75, v.w - 1.5, v.h - 1.5, 10); c.stroke();
+    // рёбра жёсткости крыши
+    c.strokeStyle = 'rgba(0,0,0,.28)'; c.lineWidth = 1;
+    for (let i = 1; i <= 3; i++) {
+      const ry = v.y + 34 + i * (v.h - 76) / 4;
+      c.beginPath(); c.moveTo(v.x + 7, ry); c.lineTo(v.x + v.w - 7, ry); c.stroke();
+    }
+    // кабина: капот + лобовое стекло с диагональным бликом + зеркала
+    c.fillStyle = '#1b232a'; rr(v.x + 4, v.y + 3, v.w - 8, 10, 5); c.fill(); // капот
+    const ws = c.createLinearGradient(v.x, v.y + 13, v.x + v.w, v.y + 27);
+    ws.addColorStop(0, '#141d26'); ws.addColorStop(0.45, '#2c3f52'); ws.addColorStop(0.55, '#41586e'); ws.addColorStop(1, '#101820');
+    c.fillStyle = ws; rr(v.x + 6, v.y + 13, v.w - 12, 14, 4); c.fill(); // лобовое
+    c.strokeStyle = 'rgba(200,220,240,.25)'; c.lineWidth = 1.2;
+    c.beginPath(); c.moveTo(v.x + 12, v.y + 25); c.lineTo(v.x + 24, v.y + 15); c.stroke(); // блик
+    c.fillStyle = '#2a333b'; // зеркала
+    c.fillRect(v.x - 7, v.y + 15, 7, 4); c.fillRect(v.x + v.w, v.y + 15, 7, 4);
+    c.fillStyle = 'rgba(255,220,150,.8)'; // габариты капота
+    c.fillRect(v.x + 6, v.y + 2, 4, 2.5); c.fillRect(v.x + v.w - 10, v.y + 2, 4, 2.5);
+    // спутниковая тарелка на крыше + кабель-антенна
+    c.fillStyle = 'rgba(0,0,0,.3)';
+    c.beginPath(); c.ellipse(cx + 13, v.y + 46, 9, 7, 0.4, 0, 7); c.fill();
+    const dg = c.createRadialGradient(cx + 10, v.y + 42, 1, cx + 12, v.y + 44, 9);
+    dg.addColorStop(0, '#c3ccd2'); dg.addColorStop(1, '#7a858d');
+    c.fillStyle = dg;
+    c.beginPath(); c.ellipse(cx + 12, v.y + 44, 8.5, 6.5, 0.4, 0, 7); c.fill();
+    c.fillStyle = '#39434b';
+    c.beginPath(); c.ellipse(cx + 12, v.y + 44, 3.2, 2.4, 0.4, 0, 7); c.fill();
+    c.strokeStyle = '#20272d'; c.lineWidth = 1.4;
+    c.beginPath(); c.moveTo(cx + 12, v.y + 44); c.lineTo(cx + 20, v.y + 38); c.stroke(); // облучатель
+    c.strokeStyle = 'rgba(20,26,30,.8)'; c.lineWidth = 1.2; // кабель по крыше
+    c.beginPath(); c.moveTo(cx + 12, v.y + 50);
+    c.quadraticCurveTo(cx - 6, v.y + 66, cx - 2, v.y + v.h - 44); c.stroke();
+    // люк-вентиляция
+    c.fillStyle = '#2b343c'; rr(cx - 14, v.y + 38, 11, 11, 2); c.fill();
+    c.strokeStyle = 'rgba(0,0,0,.4)'; c.strokeRect(cx - 14, v.y + 38, 11, 11);
+    // логотип вдоль борта
     c.save();
-    c.translate(v.x + v.w / 2, v.y + v.h * 0.55);
+    c.translate(v.x + v.w / 2, v.y + v.h * 0.5);
     c.rotate(-Math.PI / 2);
-    c.fillStyle = 'rgba(180,200,215,.5)';
+    c.fillStyle = 'rgba(190,210,225,.55)';
     c.font = 'bold 11px monospace';
     c.textAlign = 'center';
     c.fillText('П А Р А Н О Р М', 0, 4);
+    c.font = '7px monospace';
+    c.fillStyle = 'rgba(150,170,185,.4)';
+    c.fillText('ПАРАНОРМАЛЬНЫЕ РАССЛЕДОВАНИЯ', 0, 13);
     c.restore();
+    // задняя часть: распахнутые двери, интерьер-штаб, тёплый свет
+    const by = v.y + v.h;
+    c.fillStyle = '#37434c'; // створки наружу
+    rr(v.x - 17, by - 31, 16, 29, 3); c.fill();
+    rr(v.x + v.w + 1, by - 31, 16, 29, 3); c.fill();
+    c.strokeStyle = 'rgba(0,0,0,.4)'; c.lineWidth = 1;
+    c.strokeRect(v.x - 17, by - 31, 16, 29); c.strokeRect(v.x + v.w + 1, by - 31, 16, 29);
+    c.fillStyle = 'rgba(200,220,240,.14)'; // стёкла створок
+    c.fillRect(v.x - 14, by - 28, 10, 9); c.fillRect(v.x + v.w + 4, by - 28, 10, 9);
+    // тёплый свет из кузова на землю
+    const lg = c.createRadialGradient(cx, by - 6, 4, cx, by + 6, 64);
+    lg.addColorStop(0, 'rgba(255,200,120,.4)'); lg.addColorStop(1, 'rgba(255,200,120,0)');
+    c.fillStyle = lg; c.fillRect(v.x - 34, by - 40, v.w + 68, 100);
+    // интерьер: пол, стойка аппаратуры, мониторы со свечением, ящики, кресло
+    c.fillStyle = '#161d23'; c.fillRect(v.x + 5, by - 44, v.w - 10, 40); // пол отсека
+    c.fillStyle = '#232d36'; c.fillRect(v.x + 5, by - 44, v.w - 10, 6);  // перегородка
+    c.fillStyle = '#1a222a'; c.fillRect(v.x + 6, by - 36, 22, 30);       // стойка слева
+    for (let i = 0; i < 2; i++) { // мониторы с зелёным свечением и сканлайнами
+      const my = by - 33 + i * 14;
+      c.fillStyle = '#0c1410'; c.fillRect(v.x + 8, my, 16, 11);
+      const mg = c.createLinearGradient(0, my, 0, my + 11);
+      mg.addColorStop(0, 'rgba(70,220,130,.55)'); mg.addColorStop(1, 'rgba(30,110,70,.35)');
+      c.fillStyle = mg; c.fillRect(v.x + 9, my + 1, 14, 9);
+      c.strokeStyle = 'rgba(0,0,0,.35)'; c.lineWidth = 0.5;
+      for (let s = 2; s < 9; s += 2) { c.beginPath(); c.moveTo(v.x + 9, my + s); c.lineTo(v.x + 23, my + s); c.stroke(); }
+    }
+    c.fillStyle = 'rgba(120,240,160,.5)'; // LED-индикаторы стойки
+    for (let i = 0; i < 3; i++) c.fillRect(v.x + 25, by - 32 + i * 9, 1.6, 1.6);
+    c.fillStyle = '#c8842e'; rr(v.x + 34, by - 30, 9, 9, 1.5); c.fill();   // ящик
+    c.fillStyle = '#8a4436'; rr(v.x + 46, by - 33, 11, 13, 1.5); c.fill(); // кофр
+    c.strokeStyle = 'rgba(0,0,0,.4)'; c.strokeRect(v.x + 46, by - 33, 11, 13);
+    c.fillStyle = '#2e3f4c'; // офисное кресло
+    c.beginPath(); c.arc(v.x + 40, by - 12, 6, 0, 7); c.fill();
+    c.fillStyle = '#3d5364';
+    c.beginPath(); c.arc(v.x + 40, by - 12, 3.8, 0, 7); c.fill();
     c.restore();
   }
 
@@ -724,15 +779,42 @@ export class Renderer {
     // подвижная мебель: не запечена в статику; трясётся, когда призрак её дёргает
     this.drawMovableFurniture(ctx, world, floor, t);
 
-    // фосфорные точки выключателей: мягко светятся в темноте, чтобы их найти
+    // фосфорные точки выключателей: светятся, только когда свет комнаты
+    // ВЫКЛЮЧЕН (или дом обесточен) — фосфор виден в темноте и гаснет при свете
     for (const room of world.rooms) {
       if (room.floor !== floor || !room.switch) continue;
+      const lit = room.lightOn && world.breaker.on && !room.lightBroken;
+      if (lit) continue;
       const sw = room.switch;
       const pulse = 0.6 + Math.sin(t * 2.1 + room.id) * 0.25;
       ctx.fillStyle = `rgba(140,235,170,${pulse * 0.35})`; // ореол
       ctx.beginPath(); ctx.arc(sw.x, sw.y - 3, 2.6, 0, 7); ctx.fill();
       ctx.fillStyle = `rgba(170,255,190,${pulse})`;
       ctx.beginPath(); ctx.arc(sw.x, sw.y - 3, 1.3, 0, 7); ctx.fill();
+    }
+
+    // электрощиток: серый металлический бокс с рычагом и LED-индикатором
+    // (зелёный — под напряжением; тревожно мигает красным, когда выключен)
+    const br = world.breaker;
+    if (br.floor === floor) {
+      ctx.save();
+      ctx.translate(br.x, br.y);
+      ctx.fillStyle = 'rgba(0,0,0,.4)'; ctx.fillRect(-5, -7, 12, 16);   // тень
+      const bg = ctx.createLinearGradient(-6, 0, 6, 0);
+      bg.addColorStop(0, '#5a6168'); bg.addColorStop(0.5, '#767e86'); bg.addColorStop(1, '#4a5158');
+      ctx.fillStyle = bg; ctx.fillRect(-6, -8, 12, 16);                  // корпус
+      ctx.strokeStyle = '#22262a'; ctx.lineWidth = 1;
+      ctx.strokeRect(-6, -8, 12, 16);
+      ctx.beginPath(); ctx.moveTo(-6, -1); ctx.lineTo(6, -1); ctx.stroke(); // шов дверцы
+      ctx.fillStyle = '#2c3136'; ctx.fillRect(-1.2, 1.5, 2.4, 5);        // паз рычага
+      ctx.fillStyle = br.on ? '#c8b03a' : '#7d848a';                     // рычаг
+      ctx.fillRect(-1.6, br.on ? 1.5 : 4, 3.2, 2.6);
+      const led = br.on ? 0.9 : (Math.sin(t * 7) > 0 ? 1 : 0.15);        // LED
+      ctx.fillStyle = br.on ? `rgba(80,230,120,${led})` : `rgba(255,60,50,${led})`;
+      ctx.beginPath(); ctx.arc(2.8, -4.5, 1.3, 0, 7); ctx.fill();
+      ctx.fillStyle = br.on ? `rgba(80,230,120,${led * 0.3})` : `rgba(255,60,50,${led * 0.35})`;
+      ctx.beginPath(); ctx.arc(2.8, -4.5, 3.2, 0, 7); ctx.fill();
+      ctx.restore();
     }
 
     // тёплое свечение включённых ламп (под слоем тьмы)
@@ -751,43 +833,50 @@ export class Renderer {
       }
     }
 
-    // соль и отпечатки
+    // соль и следы призрака
     for (const s of world.saltPiles) {
       if (s.floor !== floor) continue;
-      ctx.fillStyle = 'rgba(225,228,232,.85)';
-      ctx.beginPath(); ctx.ellipse(s.x, s.y, 9, 6, 0, 0, 7); ctx.fill();
-      ctx.fillStyle = 'rgba(255,255,255,.5)';
-      ctx.beginPath(); ctx.ellipse(s.x - 1, s.y - 1, 5, 3, 0, 0, 7); ctx.fill();
-      if (s.disturbed) {
-        ctx.fillStyle = 'rgba(200,205,212,.5)';
+      if (!s.disturbed) {
+        // аккуратная горка с бликом и крупинками по краю
+        ctx.fillStyle = 'rgba(225,228,232,.85)';
+        ctx.beginPath(); ctx.ellipse(s.x, s.y, 9, 6, 0, 0, 7); ctx.fill();
+        ctx.fillStyle = 'rgba(255,255,255,.5)';
+        ctx.beginPath(); ctx.ellipse(s.x - 1, s.y - 1, 5, 3, 0, 0, 7); ctx.fill();
+        ctx.fillStyle = 'rgba(235,238,242,.55)';
+        for (let i = 0; i < 7; i++) {
+          const a = i * 0.9 + s.x;
+          ctx.beginPath();
+          ctx.arc(s.x + Math.cos(a) * 10.5, s.y + Math.sin(a) * 7, 0.8, 0, 7);
+          ctx.fill();
+        }
+      } else {
+        // растоптанная кучка с проломом
+        ctx.fillStyle = 'rgba(212,216,222,.7)';
+        ctx.beginPath(); ctx.ellipse(s.x, s.y, 10.5, 6.5, 0, 0, 7); ctx.fill();
+        ctx.fillStyle = 'rgba(150,155,162,.5)'; // вмятина
+        ctx.beginPath(); ctx.ellipse(s.x + 1, s.y, 4.5, 3, 0.3, 0, 7); ctx.fill();
+        // разлетевшиеся крупинки
+        ctx.fillStyle = 'rgba(228,231,236,.7)';
+        for (const g of s.scatter || []) {
+          ctx.beginPath(); ctx.arc(g.x, g.y, g.r, 0, 7); ctx.fill();
+        }
+        // дорожка босых ступней: пятка, подушечка, пальцы дугой; затухают
         for (const st of s.steps) {
-          ctx.beginPath(); ctx.ellipse(st.x, st.y, 4, 6, st.a, 0, 7); ctx.fill();
+          const f = st.fade ?? 0.6;
+          ctx.save();
+          ctx.translate(st.x, st.y); ctx.rotate(st.a);
+          ctx.fillStyle = `rgba(218,222,228,${0.65 * f})`;
+          ctx.beginPath(); ctx.ellipse(-3.2, 0, 2.1, 2.5, 0, 0, 7); ctx.fill(); // пятка
+          ctx.beginPath(); ctx.ellipse(1.9, 0, 2.5, 2.9, 0, 0, 7); ctx.fill();  // подушечка
+          for (let i = -2; i <= 2; i++) {                                        // пальцы
+            ctx.beginPath();
+            ctx.ellipse(5.4 - Math.abs(i) * 0.5, i * 1.3, 0.7, 0.95, 0, 0, 7);
+            ctx.fill();
+          }
+          ctx.restore();
         }
       }
     }
-    // УФ-отпечатки: видны только под УФ-фонарём
-    const uvOn = player.currentItem() === 'uv' && player.flashlightOn && !player.hidden;
-    if (uvOn) {
-      for (const pr of world.prints) {
-        if (pr.floor !== floor) continue;
-        const d = Math.hypot(pr.x - player.x, pr.y - player.y);
-        if (d > TILE * 5) continue;
-        const da = Math.abs(((Math.atan2(pr.y - player.y, pr.x - player.x) - player.angle + Math.PI * 3) % (Math.PI * 2)) - Math.PI);
-        if (d > TILE * 0.9 && da > 0.5) continue;
-        const a = clamp(1.6 - d / (TILE * 3.4), 0, 1);
-        ctx.fillStyle = `rgba(150,255,180,${a * 0.8})`;
-        // пятерня
-        ctx.save();
-        ctx.translate(pr.x, pr.y); ctx.rotate(pr.rot || 0);
-        ctx.beginPath(); ctx.ellipse(0, 1, 4, 5, 0, 0, 7); ctx.fill();
-        for (let i = -2; i <= 2; i++) {
-          ctx.beginPath(); ctx.ellipse(i * 2.3, -5.5, 1.1, 2.8, i * 0.16, 0, 7); ctx.fill();
-        }
-        ctx.restore();
-        if (!pr.seen) { pr.seen = true; game.onEvidenceSeen?.('uv'); }
-      }
-    }
-
     // размещённое снаряжение
     for (const it of world.placed) {
       if (it.floor !== floor) continue;
@@ -820,6 +909,36 @@ export class Renderer {
     for (const d of world.doors) {
       if (d.floor !== floor) continue;
       this.drawDoor(ctx, d);
+    }
+
+    // УФ-отпечатки — ПОСЛЕ дверей (большинство отпечатков на дверных полотнах,
+    // раньше дверь перекрывала их!). Видны только под лучом УФ-фонаря.
+    const uvOn = player.currentItem() === 'uv' && player.flashlightOn && !player.hidden;
+    if (uvOn) {
+      for (const pr of world.prints) {
+        if (pr.floor !== floor) continue;
+        const d = Math.hypot(pr.x - player.x, pr.y - player.y);
+        if (d > TILE * 5) continue;
+        const da = Math.abs(((Math.atan2(pr.y - player.y, pr.x - player.x) - player.angle + Math.PI * 3) % (Math.PI * 2)) - Math.PI);
+        if (d > TILE * 0.9 && da > 0.55) continue;
+        const a = clamp(1.7 - d / (TILE * 3.4), 0, 1);
+        ctx.save();
+        ctx.translate(pr.x, pr.y); ctx.rotate(pr.rot || 0);
+        // флюоресцентный ореол, чтобы отпечаток читался и на тёмном полотне
+        const gl = ctx.createRadialGradient(0, -1, 1, 0, -1, 11);
+        gl.addColorStop(0, `rgba(120,255,170,${a * 0.4})`);
+        gl.addColorStop(1, 'rgba(120,255,170,0)');
+        ctx.fillStyle = gl;
+        ctx.beginPath(); ctx.arc(0, -1, 11, 0, 7); ctx.fill();
+        // пятерня
+        ctx.fillStyle = `rgba(165,255,195,${a * 0.95})`;
+        ctx.beginPath(); ctx.ellipse(0, 1, 4, 5, 0, 0, 7); ctx.fill();
+        for (let i = -2; i <= 2; i++) {
+          ctx.beginPath(); ctx.ellipse(i * 2.3, -5.5, 1.1, 2.8, i * 0.16, 0, 7); ctx.fill();
+        }
+        ctx.restore();
+        if (!pr.seen) { pr.seen = true; game.onEvidenceSeen?.('uv'); }
+      }
     }
 
     // призрак под игроком по y? просто: призрак, затем игрок
